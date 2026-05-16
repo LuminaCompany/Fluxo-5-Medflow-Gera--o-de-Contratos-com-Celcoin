@@ -1,0 +1,1294 @@
+type: collection.insomnia.rest/5.0
+name: Medflow
+meta:
+  id: wrk_41b4a19bb55a4357b422c603b4c0b5c4
+  created: 1751331036588
+  modified: 1755351934228
+  description: ""
+collection:
+  - name: Celcoin
+    meta:
+      id: fld_5b67c914d226499396ad03de82b5f283
+      created: 1752067646296
+      modified: 1757428456996
+      sortKey: -1749177139457.875
+      description: ""
+    children:
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/persons"
+        name: Listar Pessoas
+        meta:
+          id: req_3396900077764af488a963d7e19fd2a1
+          created: 1752067788307
+          modified: 1753749859760
+          isPrivate: false
+          description: ""
+          sortKey: -1752067788307
+        method: GET
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: accept
+            value: application/json
+            id: pair_25e04263d0194caabaa65db6a428f1a2
+          - name: content-type
+            value: application/json
+            id: pair_3c2ee962b7fe4ed4a104be7d1f3148c9
+          - id: pair_7123decd331948eb96f2228f7b7d43a4
+            name: Authorization
+            value: Bearer {% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+              'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_auth_url }}/oauth2/token"
+        name: Autenticação
+        meta:
+          id: req_853a0f838a894e09b48ed3ecdabe3b20
+          created: 1752068560085
+          modified: 1754140873345
+          isPrivate: false
+          description: ""
+          sortKey: -1752068560085
+        method: POST
+        body:
+          mimeType: multipart/form-data
+          params:
+            - name: grant_type
+              value: client_credentials
+        parameters:
+          - id: pair_4a3c28eac40340aeacee7dc2dfc6c27b
+            name: ""
+            value: ""
+            description: ""
+            disabled: false
+        headers:
+          - name: Content-Type
+            value: multipart/form-data
+            id: pair_2700af2ebc804644a796ea0e7434062c
+            disabled: true
+          - name: accept
+            value: application/json
+            id: pair_b1e15e811c3a4e8aa36c6d0b4e7e4937
+        authentication:
+          type: basic
+          useISO88591: false
+          disabled: false
+          username: 2i55lhggjyek6x1xem4kbjuibe
+          password: SySR98TeM1xWZFQcczSXgpmk6TmDnoO8
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/persons"
+        name: Criar Pessoa
+        meta:
+          id: req_0b888faf6c144e528797ebf667e02028
+          created: 1753749681204
+          modified: 1755554713739
+          isPrivate: false
+          description: ""
+          sortKey: -1752067726075.5
+        method: POST
+        body:
+          mimeType: application/json
+          text: >2-
+             {
+            	 "full_name": "{% gerarNome true, '', true, true, '', true, false %}",
+            	 "email_address": "{% gerarEmail 'email.test.', true, 1, 9999, '', 'mock.com.br' %}",
+            	 "taxpayer_id": "{% geradorDeCPF false %}",
+            	 "occupation": "Algo",
+            	 "nationality": "Brasileira",
+            	 "phone": {
+            		 "country_code": "55",
+            		 "area_code": "48",
+            		 "number": "999999999"
+            	 }
+             }
+        headers:
+          - name: accept
+            value: application/json
+            id: pair_25e04263d0194caabaa65db6a428f1a2
+          - name: content-type
+            value: application/json
+            id: pair_3c2ee962b7fe4ed4a104be7d1f3148c9
+          - id: pair_7123decd331948eb96f2228f7b7d43a4
+            name: Authorization
+            value: Bearer {% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+              'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url
+          }}/banking/originator/applications/preview-total-amount"
+        name: Simular Empréstimo
+        meta:
+          id: req_8d0b1056616f47a891e8f12447aec1e8
+          created: 1753750254303
+          modified: 1774387851118
+          isPrivate: false
+          description: ""
+          sortKey: -1752067725975.5
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "total_amount_owed": 5000,
+              "interest_rate": 0.07,
+              "tac_amount": 0,
+              "finance_fee": 0,
+              "iofType": "BUSINESS",
+              "num_payments": 1,
+              "first_payment_date": "2026-05-01",
+              "disbursement_date": "2026-04-01",
+              "borrower_type": "PERSON",
+              "schedule_type": "MONTHLY"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+            id: pair_17ff11e8a4bc4390823dfc645e9f22a5
+          - name: User-Agent
+            value: insomnia/11.1.0
+            id: pair_dfb8b2f128a74614b9be3b194a9640c1
+          - id: pair_ec3026c6a5b14a2080ed04189369e698
+            name: Accept
+            value: application/json
+            description: ""
+            disabled: false
+        authentication:
+          type: bearer
+          token: "{% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+            'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}"
+          prefix: Bearer
+          disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/applications"
+        name: Solicitar Empréstimo
+        meta:
+          id: req_3a27c4e08d26447aa202484e552ed5fa
+          created: 1753751139536
+          modified: 1774387914334
+          isPrivate: false
+          description: ""
+          sortKey: -1751699938100.75
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+            	"product": {
+            		"id": "3190e65f-9931-4d8e-9f2d-ad20fa86388e"
+            	},
+            	"borrower": {
+            		"id": "31dfb8d7-bc0b-4fa8-91a7-71188c05f1ee"
+            	},
+            	"funding": {
+            		"id": "0e91bcd6-d54e-4534-a69e-ff0dfe7c9d9d"
+            	},
+            	"requested_amount": 1000,
+            	"interest_rate": 0.02,
+            	"tac_amount": 0,
+            	"finance_fee": 0,
+            	"num_payments": 1,
+            	"first_payment_date": "2026-02-21",
+            	"disbursement_date": "2026-02-11",
+            	"signature_collect_method": "NONE"
+
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+            id: pair_17ff11e8a4bc4390823dfc645e9f22a5
+          - name: User-Agent
+            value: insomnia/11.1.0
+            id: pair_dfb8b2f128a74614b9be3b194a9640c1
+          - id: pair_ec3026c6a5b14a2080ed04189369e698
+            name: Accept
+            value: application/json
+            description: ""
+            disabled: false
+        authentication:
+          type: bearer
+          token: "{% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+            'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}"
+          prefix: Bearer
+          disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/products"
+        name: Listar Produtos
+        meta:
+          id: req_614af5511b8b411283a251934023975a
+          created: 1753751564565
+          modified: 1757376931887
+          isPrivate: false
+          description: ""
+          sortKey: -1752067757191.25
+        method: GET
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: accept
+            value: application/json
+            id: pair_25e04263d0194caabaa65db6a428f1a2
+          - name: content-type
+            value: application/json
+            id: pair_3c2ee962b7fe4ed4a104be7d1f3148c9
+          - id: pair_7123decd331948eb96f2228f7b7d43a4
+            name: Authorization
+            value: Bearer {% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+              'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/business"
+        name: Listar Empresas
+        meta:
+          id: req_712f36bd303d4aa0993eb4e295aca872
+          created: 1753751656431
+          modified: 1753751660458
+          isPrivate: false
+          description: ""
+          sortKey: -1752067741633.375
+        method: GET
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: accept
+            value: application/json
+            id: pair_25e04263d0194caabaa65db6a428f1a2
+          - name: content-type
+            value: application/json
+            id: pair_3c2ee962b7fe4ed4a104be7d1f3148c9
+          - id: pair_7123decd331948eb96f2228f7b7d43a4
+            name: Authorization
+            value: Bearer {% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+              'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/beneficiary-accounts"
+        name: Listar Contas
+        meta:
+          id: req_f1f6a36a6aeb4c2a9c06851fc2356ace
+          created: 1757376952081
+          modified: 1757376962140
+          isPrivate: false
+          description: ""
+          sortKey: -1752067749412.3125
+        method: GET
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: accept
+            value: application/json
+            id: pair_25e04263d0194caabaa65db6a428f1a2
+          - name: content-type
+            value: application/json
+            id: pair_3c2ee962b7fe4ed4a104be7d1f3148c9
+          - id: pair_7123decd331948eb96f2228f7b7d43a4
+            name: Authorization
+            value: Bearer {% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+              'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/persons/{% response
+          'body', 'req_3396900077764af488a963d7e19fd2a1',
+          'b64::JC5jb250ZW50LjAuaWQ=::46b', 'never', 60 %}"
+        name: Detalhe Pessoa
+        meta:
+          id: req_4b43ebe7bb944bdbb6f2d2709b8db72f
+          created: 1757381293351
+          modified: 1770850088032
+          isPrivate: false
+          description: ""
+          sortKey: -1752067772749.125
+        method: GET
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: accept
+            value: application/json
+            id: pair_25e04263d0194caabaa65db6a428f1a2
+          - name: content-type
+            value: application/json
+            id: pair_3c2ee962b7fe4ed4a104be7d1f3148c9
+          - id: pair_7123decd331948eb96f2228f7b7d43a4
+            name: Authorization
+            value: Bearer {% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+              'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/persons/{% response
+          'body', 'req_3396900077764af488a963d7e19fd2a1',
+          'b64::JC5jb250ZW50LjAuaWQ=::46b', 'never', 60 %}/documents"
+        name: Documents Pessoa
+        meta:
+          id: req_71ef3a581fb74c79961b092c95ef580b
+          created: 1757381331386
+          modified: 1757381335262
+          isPrivate: false
+          description: ""
+          sortKey: -1752067764970.1875
+        method: GET
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: accept
+            value: application/json
+            id: pair_25e04263d0194caabaa65db6a428f1a2
+          - name: content-type
+            value: application/json
+            id: pair_3c2ee962b7fe4ed4a104be7d1f3148c9
+          - id: pair_7123decd331948eb96f2228f7b7d43a4
+            name: Authorization
+            value: Bearer {% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+              'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/persons/{% response
+          'body', 'req_4b43ebe7bb944bdbb6f2d2709b8db72f', 'b64::JC5pZA==::46b',
+          'never', 60 %}/documents"
+        name: Documentos Pessoa
+        meta:
+          id: req_f45a9e9369e64b84a69c8632dd783978
+          created: 1757428473656
+          modified: 1770850596729
+          isPrivate: false
+          description: ""
+          sortKey: -1752067768859.6562
+        method: GET
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: accept
+            value: application/json
+            id: pair_25e04263d0194caabaa65db6a428f1a2
+          - name: content-type
+            value: application/json
+            id: pair_3c2ee962b7fe4ed4a104be7d1f3148c9
+          - id: pair_7123decd331948eb96f2228f7b7d43a4
+            name: Authorization
+            value: Bearer {% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+              'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/webhooks"
+        name: Listar Webhooks
+        meta:
+          id: req_620246c7a0ba495d849387f9bbc2b8fb
+          created: 1760053413572
+          modified: 1760053419229
+          isPrivate: false
+          description: ""
+          sortKey: -1752067745522.8438
+        method: GET
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: accept
+            value: application/json
+            id: pair_25e04263d0194caabaa65db6a428f1a2
+          - name: content-type
+            value: application/json
+            id: pair_3c2ee962b7fe4ed4a104be7d1f3148c9
+          - id: pair_7123decd331948eb96f2228f7b7d43a4
+            name: Authorization
+            value: Bearer {% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+              'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/webhooks"
+        name: Criar Webhook
+        meta:
+          id: req_70f687a0f5614ebd9236c09a002a7e23
+          created: 1760053501060
+          modified: 1771882625275
+          isPrivate: false
+          description: ""
+          sortKey: -1752067743578.1094
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+                "url": "https://app.medflowfin.com/api/v1/webhooks"
+            }
+        headers:
+          - name: accept
+            value: application/json
+            id: pair_25e04263d0194caabaa65db6a428f1a2
+          - name: content-type
+            value: application/json
+            id: pair_3c2ee962b7fe4ed4a104be7d1f3148c9
+          - id: pair_7123decd331948eb96f2228f7b7d43a4
+            name: Authorization
+            value: Bearer {% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+              'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/applications"
+        name: Listar Empréstimos
+        meta:
+          id: req_f6c22eaf41fc4d00a3ca6edd5d166db5
+          created: 1760054324099
+          modified: 1760054459897
+          isPrivate: false
+          description: ""
+          sortKey: -1750284688329.375
+        method: GET
+        body:
+          mimeType: application/json
+          text: |-
+            {
+            	"product": {
+            		"id": "3190e65f-9931-4d8e-9f2d-ad20fa86388e"
+            	},
+            	"borrower": {
+            		"id": "28837a6d-2f23-40f8-9198-f3d0efe1cbc0"
+            	},
+            	"funding": {
+            		"id": "0e91bcd6-d54e-4534-a69e-ff0dfe7c9d9d"
+            	},
+            	"requested_amount": 100,
+            	"interest_rate": 0.02,
+            	"tac_rate": 0.1,
+            	"finance_fee": 0,
+            	"num_payments": 1,
+            	"first_payment_date": "2025-10-13",
+            	"disbursement_date": "2025-09-13",
+            	"signature_collect_method": "EMAIL",
+            	"signature_provider": "CLICKSIGN",
+            	"signature_authentication_options": {
+            		"mode": "FACIAL_BIOMETRICS"
+            	}
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+            id: pair_17ff11e8a4bc4390823dfc645e9f22a5
+          - name: User-Agent
+            value: insomnia/11.1.0
+            id: pair_dfb8b2f128a74614b9be3b194a9640c1
+          - id: pair_ec3026c6a5b14a2080ed04189369e698
+            name: Accept
+            value: application/json
+            description: ""
+            disabled: false
+        authentication:
+          type: bearer
+          token: "{% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+            'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}"
+          prefix: Bearer
+          disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/applications/{% response
+          'body', 'req_f6c22eaf41fc4d00a3ca6edd5d166db5',
+          'b64::JC5jb250ZW50WzBdLmlk::46b', 'always', 60 %}"
+        name: Verificar Empréstimo
+        meta:
+          id: req_1c4f0f77b84940aab4fd13f5f577f177
+          created: 1760054414739
+          modified: 1774388771729
+          isPrivate: false
+          description: ""
+          sortKey: -1749577063443.6875
+        method: GET
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: Content-Type
+            value: application/json
+            id: pair_17ff11e8a4bc4390823dfc645e9f22a5
+          - name: User-Agent
+            value: insomnia/11.1.0
+            id: pair_dfb8b2f128a74614b9be3b194a9640c1
+          - id: pair_ec3026c6a5b14a2080ed04189369e698
+            name: Accept
+            value: application/json
+            description: ""
+            disabled: false
+        authentication:
+          type: bearer
+          token: "{% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+            'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}"
+          prefix: Bearer
+          disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/applications/{% response
+          'body', 'req_f6c22eaf41fc4d00a3ca6edd5d166db5',
+          'b64::JC5jb250ZW50WzBdLmlk::46b', 'never', 60 %}/signatures"
+        name: Verificar Assinaturas Empréstimo
+        meta:
+          id: req_1fa40fdadd654466b79f558fcdae5180
+          created: 1760054473061
+          modified: 1774388818722
+          isPrivate: false
+          description: ""
+          sortKey: -1749223251000.8438
+        method: GET
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: Content-Type
+            value: application/json
+            id: pair_17ff11e8a4bc4390823dfc645e9f22a5
+          - name: User-Agent
+            value: insomnia/11.1.0
+            id: pair_dfb8b2f128a74614b9be3b194a9640c1
+          - id: pair_ec3026c6a5b14a2080ed04189369e698
+            name: Accept
+            value: application/json
+            description: ""
+            disabled: false
+        authentication:
+          type: bearer
+          token: "{% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+            'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}"
+          prefix: Bearer
+          disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/products/{% response
+          'body', 'req_614af5511b8b411283a251934023975a',
+          'b64::JC5jb250ZW50WzBdLmlk::46b', 'never', 60
+          %}/qualification-requests"
+        name: Listar Ordens de Pagamento
+        meta:
+          id: req_c1de43b1d444425f8f5ed6156beae8ad
+          created: 1760056365143
+          modified: 1760056459246
+          isPrivate: false
+          description: ""
+          sortKey: -1752067755246.5156
+        method: GET
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: accept
+            value: application/json
+            id: pair_25e04263d0194caabaa65db6a428f1a2
+          - name: content-type
+            value: application/json
+            id: pair_3c2ee962b7fe4ed4a104be7d1f3148c9
+          - id: pair_7123decd331948eb96f2228f7b7d43a4
+            name: Authorization
+            value: Bearer {% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+              'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/products/{% response
+          'body', 'req_614af5511b8b411283a251934023975a',
+          'b64::JC5jb250ZW50WzBdLmlk::46b', 'never', 60 %}"
+        name: Consultar Produto
+        meta:
+          id: req_05fafe30898d4f72aef2d519cede8603
+          created: 1760056450955
+          modified: 1760056453631
+          isPrivate: false
+          description: ""
+          sortKey: -1752067756218.8828
+        method: GET
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: accept
+            value: application/json
+            id: pair_25e04263d0194caabaa65db6a428f1a2
+          - name: content-type
+            value: application/json
+            id: pair_3c2ee962b7fe4ed4a104be7d1f3148c9
+          - id: pair_7123decd331948eb96f2228f7b7d43a4
+            name: Authorization
+            value: Bearer {% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+              'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/applications/{% response
+          'body', 'req_1c4f0f77b84940aab4fd13f5f577f177', 'b64::JC5pZA==::46b',
+          'never', 60 %}/payment-orders/{% response 'body',
+          'req_1c4f0f77b84940aab4fd13f5f577f177',
+          'b64::JC5wYXltZW50X29yZGVyc1swXS5pZA==::46b', 'never', 60 %}"
+        name: Aprovar Empréstimo
+        meta:
+          id: req_57c11667b90c4baf955241b1c69ac798
+          created: 1760058189717
+          modified: 1774388750191
+          isPrivate: false
+          description: ""
+          sortKey: -1749930875886.5312
+        method: PUT
+        body:
+          mimeType: application/json
+          text: "{}"
+        headers:
+          - name: Content-Type
+            value: application/json
+            id: pair_17ff11e8a4bc4390823dfc645e9f22a5
+          - name: User-Agent
+            value: insomnia/11.1.0
+            id: pair_dfb8b2f128a74614b9be3b194a9640c1
+          - id: pair_ec3026c6a5b14a2080ed04189369e698
+            name: Accept
+            value: application/json
+            description: ""
+            disabled: false
+        authentication:
+          type: bearer
+          token: "{% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+            'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}"
+          prefix: Bearer
+          disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/applications/{% response
+          'body', 'req_f6c22eaf41fc4d00a3ca6edd5d166db5',
+          'b64::JC5jb250ZW50WzBdLmlk::46b', 'never', 60
+          %}//disbursement-attempts/"
+        name: Listar as Tentativas de Desembolso para uma Solicitação
+        meta:
+          id: req_c08d968bd150484eaa88e775334a0305
+          created: 1760058395898
+          modified: 1760058402616
+          isPrivate: false
+          description: ""
+          sortKey: -1749400157222.2656
+        method: GET
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: Content-Type
+            value: application/json
+            id: pair_17ff11e8a4bc4390823dfc645e9f22a5
+          - name: User-Agent
+            value: insomnia/11.1.0
+            id: pair_dfb8b2f128a74614b9be3b194a9640c1
+          - id: pair_ec3026c6a5b14a2080ed04189369e698
+            name: Accept
+            value: application/json
+            description: ""
+            disabled: false
+        authentication:
+          type: bearer
+          token: "{% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+            'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}"
+          prefix: Bearer
+          disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/applications/{% response
+          'body', 'req_f6c22eaf41fc4d00a3ca6edd5d166db5',
+          'b64::JC5jb250ZW50WzBdLmlk::46b', 'never', 60
+          %}/disbursement-attempts/"
+        name: Criar Tentativa de Desembolso para uma Solicitação
+        meta:
+          id: req_aa67b11f664a4730a1a66be9f50c2c37
+          created: 1760058428900
+          modified: 1760058436929
+          isPrivate: false
+          description: ""
+          sortKey: -1749311704111.5547
+        method: POST
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: Content-Type
+            value: application/json
+            id: pair_17ff11e8a4bc4390823dfc645e9f22a5
+          - name: User-Agent
+            value: insomnia/11.1.0
+            id: pair_dfb8b2f128a74614b9be3b194a9640c1
+          - id: pair_ec3026c6a5b14a2080ed04189369e698
+            name: Accept
+            value: application/json
+            description: ""
+            disabled: false
+        authentication:
+          type: bearer
+          token: "{% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+            'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}"
+          prefix: Bearer
+          disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/products/{% response
+          'body', 'req_614af5511b8b411283a251934023975a',
+          'b64::JC5jb250ZW50WzBdLmlk::46b', 'never', 60
+          %}/qualification-requests/{% response 'body',
+          'req_c1de43b1d444425f8f5ed6156beae8ad',
+          'b64::JC5jb250ZW50WzBdLmlk::46b', 'never', 60 %}/qualify"
+        name: Alterar Ordem de Pagamento
+        meta:
+          id: req_cdaff660590c4a0c8f90fab424d4fa19
+          created: 1760059411008
+          modified: 1763342264944
+          isPrivate: false
+          description: ""
+          sortKey: -1752067754274.1484
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "status": "QUALIFIED"
+            }
+        headers:
+          - name: accept
+            value: application/json
+            id: pair_25e04263d0194caabaa65db6a428f1a2
+          - name: content-type
+            value: application/json
+            id: pair_3c2ee962b7fe4ed4a104be7d1f3148c9
+          - id: pair_7123decd331948eb96f2228f7b7d43a4
+            name: Authorization
+            value: Bearer {% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+              'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/webhooks/{% response
+          'body', 'req_620246c7a0ba495d849387f9bbc2b8fb',
+          'b64::JC5bMF0uaWQ=::46b', 'never', 60 %}"
+        name: Deletar Webhook
+        meta:
+          id: req_743271c659a74983bb24e7f6bc664234
+          created: 1761867405257
+          modified: 1761867456400
+          isPrivate: false
+          description: ""
+          sortKey: -1752067744550.4766
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: accept
+            value: application/json
+            id: pair_25e04263d0194caabaa65db6a428f1a2
+          - name: content-type
+            value: application/json
+            id: pair_3c2ee962b7fe4ed4a104be7d1f3148c9
+          - id: pair_7123decd331948eb96f2228f7b7d43a4
+            name: Authorization
+            value: Bearer {% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+              'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url
+          }}/banking/originator/persons/a68b871d-20d8-4200-b455-68c1a5c0ac0f/do\
+          cuments/{% response 'body', 'req_f45a9e9369e64b84a69c8632dd783978',
+          'b64::JC4wLmlk::46b', 'always', 60 %}"
+        name: Deletar Documentos Pessoa
+        meta:
+          id: req_e4b5cf7507b147dfa7b042df4f2c97dc
+          created: 1762990343938
+          modified: 1769644880833
+          isPrivate: false
+          description: ""
+          sortKey: -1752067766914.9219
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: accept
+            value: application/json
+            id: pair_25e04263d0194caabaa65db6a428f1a2
+          - name: content-type
+            value: application/json
+            id: pair_3c2ee962b7fe4ed4a104be7d1f3148c9
+          - id: pair_7123decd331948eb96f2228f7b7d43a4
+            name: Authorization
+            value: Bearer {% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+              'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/applications/{% response
+          'body', 'req_affb42a34f404d84b586fb714aba1a6a',
+          'b64::JC5jb250ZW50LjAuaWQ=::46b', 'always', 60 %}/cancel"
+        name: Cancelar Empréstimos
+        meta:
+          id: req_34b4e7c952a54fe293cc93d8ef917bd1
+          created: 1762996743558
+          modified: 1762996811412
+          isPrivate: false
+          description: ""
+          sortKey: -1752067751357.0469
+        method: POST
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: accept
+            value: application/json
+            id: pair_25e04263d0194caabaa65db6a428f1a2
+          - name: content-type
+            value: application/json
+            id: pair_3c2ee962b7fe4ed4a104be7d1f3148c9
+          - id: pair_7123decd331948eb96f2228f7b7d43a4
+            name: Authorization
+            value: Bearer {% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+              'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/preferences/sign"
+        name: Verificar Configurações Assinaturas
+        meta:
+          id: req_5a40163257ea447296af4d5ce5806aa3
+          created: 1763418497194
+          modified: 1763418539512
+          isPrivate: false
+          description: ""
+          sortKey: -1749223250950.8438
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+            	"brand_primary_color": null,
+            	"brand_name": null,
+            	"brand_logo": null,
+            	"phone_verification_required": false,
+            	"email_verification_required": false
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+            id: pair_17ff11e8a4bc4390823dfc645e9f22a5
+          - name: User-Agent
+            value: insomnia/11.1.0
+            id: pair_dfb8b2f128a74614b9be3b194a9640c1
+          - id: pair_ec3026c6a5b14a2080ed04189369e698
+            name: Accept
+            value: application/json
+            description: ""
+            disabled: false
+        authentication:
+          type: bearer
+          token: "{% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+            'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}"
+          prefix: Bearer
+          disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/persons/{% response
+          'body', 'req_3396900077764af488a963d7e19fd2a1',
+          'b64::JC5jb250ZW50LjMuaWQ=::46b', 'never', 60 %}"
+        name: Remover Pessoa
+        meta:
+          id: req_ededd482c2dc4c4ea396bf79d2ad3c20
+          created: 1769691796767
+          modified: 1769691857066
+          isPrivate: false
+          description: ""
+          sortKey: -1752067770804.3906
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: ""
+        headers:
+          - name: accept
+            value: application/json
+            id: pair_25e04263d0194caabaa65db6a428f1a2
+          - name: content-type
+            value: application/json
+            id: pair_3c2ee962b7fe4ed4a104be7d1f3148c9
+          - id: pair_7123decd331948eb96f2228f7b7d43a4
+            name: Authorization
+            value: Bearer {% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+              'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}
+            description: ""
+            disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.celcoin_platform_url }}/banking/originator/applications/{% response
+          'body', 'req_f6c22eaf41fc4d00a3ca6edd5d166db5',
+          'b64::JC5jb250ZW50WzBdLmlk::46b', 'never', 60 %}/signatures"
+        name: Adicionar Assinatura Fisica
+        meta:
+          id: req_70a561ec618d448ca7c9b6ea77e6429c
+          created: 1774389384692
+          modified: 1774457857270
+          isPrivate: false
+          description: ""
+          sortKey: -1749223250975.8438
+        method: POST
+        body:
+          mimeType: application/json
+          text: >-
+            {
+                
+                "ip_address": "200.120.12.43",
+                "user_agent": "Insomnia",
+                "signed_at": "{% now 'iso-8601', '' %}",
+            	 "person": "{% response 'body', 'req_f6c22eaf41fc4d00a3ca6edd5d166db5', 'b64::JC5jb250ZW50LjAuYm9ycm93ZXIuaWQ=::46b', 'never', 60 %}",
+            	"geolocation": "-23.55052,-46.63331"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: User-Agent
+            value: insomnia/11.1.0
+            id: pair_dfb8b2f128a74614b9be3b194a9640c1
+          - id: pair_ec3026c6a5b14a2080ed04189369e698
+            name: Accept
+            value: text/plain
+            description: ""
+            disabled: false
+        authentication:
+          type: bearer
+          token: "{% response 'body', 'req_853a0f838a894e09b48ed3ecdabe3b20',
+            'b64::JC5hY2Nlc3NfdG9rZW4=::46b', 'when-expired', 3600 %}"
+          prefix: Bearer
+          disabled: false
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+  - name: API
+    meta:
+      id: fld_dd4840ffa4514c77b92d717013e79c9c
+      created: 1755094027833
+      modified: 1757449695978
+      sortKey: -1755094027833
+      description: ""
+    children:
+      - name: Users
+        meta:
+          id: fld_346e7a43852b46e781cd1862146d11b3
+          created: 1755094072066
+          modified: 1757423721322
+          sortKey: -1756337731229
+          description: ""
+      - name: Sessions
+        meta:
+          id: fld_981e83221c154477b58c105144754977
+          created: 1755094235434
+          modified: 1757423717631
+          sortKey: -1756337731129
+          description: ""
+      - name: Protected
+        meta:
+          id: fld_17c007ed96034aa5b933c7f241e583d8
+          created: 1757423674874
+          modified: 1757423723648
+          sortKey: -1756337731029
+          description: ""
+        children:
+          - name: Loans
+            meta:
+              id: fld_9433b1411999486ab1c474d99cd4ccc8
+              created: 1756337730829
+              modified: 1757423684488
+              sortKey: -1757423679106
+              description: ""
+          - name: Profiles
+            meta:
+              id: fld_e099d0b4283b41d89273e19004f6ef74
+              created: 1756338112773
+              modified: 1763383285105
+              sortKey: -1757426180845
+              description: ""
+          - name: Documents
+            meta:
+              id: fld_8a16b5d4822842699c0fa3d14e67f38b
+              created: 1757426180745
+              modified: 1762993978664
+              sortKey: -1757426180745
+              description: ""
+          - name: Addresses
+            meta:
+              id: fld_59ca3be219d34e3eb4a42b4202075417
+              created: 1762993989288
+              modified: 1762993989288
+              sortKey: -1757424929975.5
+              description: ""
+          - name: BankAccounts
+            meta:
+              id: fld_9a4e3a21f41345afbd753f9d5cb67011
+              created: 1764286265021
+              modified: 1764286265021
+              sortKey: -1757424304540.75
+              description: ""
+          - name: Notifications
+            meta:
+              id: fld_eec81b1fabf24fe093f8ca80c6b68869
+              created: 1765407062350
+              modified: 1765407062350
+              sortKey: -1757423991823.375
+              description: ""
+cookieJar:
+  name: Default Jar
+  meta:
+    id: jar_d0f09af8b495669f99a3596e719f0679ac301f3b
+    created: 1751331036590
+    modified: 1763418165014
+  cookies:
+    - key: _session_id
+      value: 7WNIFj6w7zpJlMRBRWkG7FfMsBMLqjjQEVh6TeA6T9sRtQdAdIWQ0V8R6eNhFSEy%2FYhzIn1Yyx9zNUteGfpYVDUI0yTCmUJIuCIU65YV0gc6IdjbpvgoTIzyrgXDJeC1Ue%2B4%2BaGYv9aZ3lwArAhCIN163TM6U64eqjMIodiVlJRP%2Fbh8f%2B8OAiowX4Csn4LFNNXbt47d3gZ0Fq4oW5vQKzJSK8xmXhto7h3YLzT4BwTB1TthTb0%2FhDS42hJT2LHzQv098tNRPdwLfAAUGBv%2BYxwaHw%3D%3D--oVXh4zB1KxUmm0Ka--yAAC2%2F7V3Jm9wXKKLC7WxA%3D%3D
+      domain: medflow-hhrc.onrender.com
+      path: /
+      secure: true
+      httpOnly: true
+      hostOnly: true
+      creation: 2025-11-12T22:38:51.760Z
+      lastAccessed: 2025-11-17T22:22:45.014Z
+      sameSite: lax
+      id: f2fa9eb1-fd6f-40cc-9617-73c084666f6d
+    - key: _session_id
+      value: FIg%2FpiW%2FLbogy5bPso0%2Fo%2Bo%2FEjKNLL6TY7ARl2nqLp2kYz%2BsdiWwwBbvVeT36zbXe08KLMKDtn4mKBxttqNHuj0iMqPCszW592Wz7NJw%2BvzmWy9j8l4394v5c1VDbOF%2FoAfleTHaQBVi7h8EsezCfWxKAwtcwJ41iQOlp33QRrE8Y6MlXU8iT6xsaznH1x9TNI9AgF2pfVpRFATuQWGYsXyY1jv2BsIKspTTM2TsUAr8SdyFTphxuElPsDBLZSyFhI2RBLVvVg19M4IJrzQ78qQscQ%3D%3D--Zk8K%2Fsw8ocO%2Bpp0q--wW8JPtnAqmhlrs2g0yTzOg%3D%3D
+      domain: localhost
+      path: /
+      httpOnly: true
+      hostOnly: true
+      creation: 2025-11-12T22:42:01.179Z
+      lastAccessed: 2025-11-14T02:32:31.761Z
+      sameSite: lax
+      id: 3a70136e-5148-4025-b9f3-ea4b0fccd909
+environments:
+  name: Main
+  meta:
+    id: env_d0f09af8b495669f99a3596e719f0679ac301f3b
+    created: 1751331036590
+    modified: 1762698536214
+    isPrivate: false
+  data:
+    celcoin_auth_url: https://sandbox.auth.flowfinance.com.br
+    celcoin_platform_url: https://sandbox.platform.flowfinance.com.br
+    medflow_api: http://127.0.0.1:3000/api/v1/
+  subEnvironments:
+    - name: Prod
+      meta:
+        id: env_3fe4b2c2816e48258d6c2cff85643cb3
+        created: 1762220207646
+        modified: 1762698570223
+        isPrivate: false
+        sortKey: 1762220207647
+      data:
+        celcoin_auth_url: https://sandbox.auth.flowfinance.com.br
+        celcoin_platform_url: https://sandbox.platform.flowfinance.com.br
+        medflow_api: https://medflow-hhrc.onrender.com/api/v1/
+        medflow_url: https://medflow-hhrc.onrender.com/
+      color: "#009454"
+    - name: Dev
+      meta:
+        id: env_64f836ce811143f38dfe9c2bab679c21
+        created: 1762698485637
+        modified: 1762698563145
+        isPrivate: false
+        sortKey: 1762698485637
+      data:
+        celcoin_auth_url: https://sandbox.auth.flowfinance.com.br
+        celcoin_platform_url: https://sandbox.platform.flowfinance.com.br
+        medflow_api: http://127.0.0.1:3000/api/v1/
+        medflow_url: http://127.0.0.1:3000/
+      color: "#6c8fd5"
