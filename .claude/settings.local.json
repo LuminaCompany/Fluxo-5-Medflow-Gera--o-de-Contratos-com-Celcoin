@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__n8n__search_executions",
+      "Bash(cd /tmp && head -c 600 ff_orig.json && echo \"---\" && grep -o -i \"beneficiar[a-z_-]*\\\\|pix\\\\|bank_account\\\\|account\" ff_orig.json | sort | uniq -c)",
+      "Read(//e/tmp/**)"
+    ]
+  }
+}
