@@ -1,90 +1,130 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file guides Claude Code (claude.ai/code) when working in this repository.
 
 ## Project Overview
 
-This is an **n8n automation workflow** project (not a traditional codebase). All logic lives inside n8n as workflow nodes. The only local file is `celcoin-medflow.yaml` — an Insomnia collection used as API reference for Celcoin/FlowFinance endpoints.
-.
-**Workflow:** Fluxo 5 — Emissão CCB (Celcoin)
-**n8n Workflow ID:** `wqyQKymnaXLTFazA`
-**n8n Instance:** `https://automacao-medflow-n8n.zhe0xi.easypanel.host`
+This is an **n8n automation project** for **Medflow** — a receivables-anticipation
+platform for doctors, operated over WhatsApp with conversational AI. There is no
+traditional codebase: **all logic lives inside n8n as workflow nodes.** This repo
+holds reference material and the tooling config used to build those workflows.
 
-## Working with This Project
+**n8n instance:** `https://automacao-medflow-n8n.zhe0xi.easypanel.host`
 
-All modifications are made via **n8n MCP tools** — not by editing files locally.
+**Primary workflow in this repo:** Fluxo 5 — Emissão CCB (Celcoin), ID `wqyQKymnaXLTFazA`.
+The full product (6 flows) is specified in **`spec.md`** — read it before changing any
+flow. This file is the *how you work*; `spec.md` is the *what the product is*.
 
-**Node preferences:**
-- Use `n8n-nodes-base.supabase` (credential: `PBRtbhImrvfXokbu` "Supabase account 2") for ALL Supabase operations — never HTTP Request nodes for Supabase. Easier to read and edit in the UI.
-- HTTP Request nodes are only for external APIs (Celcoin, Evolution API, etc.).
+## How You Build Workflows Here
 
-Key tools:
-- `mcp__n8n__n8n_get_workflow` — read current state
-- `mcp__n8n__n8n_update_partial_workflow` — make changes (preferred over full update)
-- `mcp__n8n__n8n_validate_workflow` — validate after changes
-- `mcp__n8n__n8n_autofix_workflow` — fix common errors
+All workflow changes are made through the **n8n-mcp** MCP server
+(https://github.com/czlonkowski/n8n-mcp) — never by editing files locally. Workflow
+construction is reinforced by the **n8n-skills** plugin
+(https://github.com/czlonkowski/n8n-skills). Lean on both: the MCP tools give you
+live node/template data and validation; the skills encode the patterns and gotchas.
 
-**Important MCP behavior:** When using `n8n_update_partial_workflow` with mixed operation types in one call, the tool may reorder them (e.g., `updateNode` before `removeConnection`). To avoid name-mismatch errors, split into separate calls:
-1. First call: `removeNode` / `removeConnection` only
-2. Second call: `updateNode` (rename/code) + `addConnection`
+### Recommended process (discovery → build → validate → deploy)
 
-The workflow validator rejects disconnected nodes — if removing a node leaves others with no connections, add the replacement connection in the same call.
+1. **Discover.** Check `search_templates` before building from scratch. Use
+   `search_nodes` (in parallel for multiple candidates) and `get_node` to learn the
+   exact properties. Choose detail level deliberately — minimal (~200 tokens) when you
+   know the node, full (~3–8k tokens) when configuring something unfamiliar.
+2. **Configure explicitly.** Never rely on default values — unset defaults cause
+   runtime failures. Set every parameter the node needs.
+3. **Validate in layers** *before* deploying: `validate_node` (minimal → full) on each
+   configured node, then `validate_workflow` on the whole graph (this also runs AI Agent
+   checks). Fix findings, then re-validate.
+4. **Deploy and re-validate.** Apply with the management tools, then run
+   `n8n_validate_workflow` and `n8n_autofix_workflow` to catch anything that slipped.
 
-## Workflow Architecture
+Run independent MCP calls in parallel. If you used a template, attribute it (author
+name, username, n8n.io link).
 
-**Trigger:** Called by Fluxo 3 (WhatsApp flow) with `{ phone, instancia, mensagem }`.
+### Key MCP tools
 
-**Flow sequence:**
-```
-Chamado pelo Fluxo 3
-→ Preparar Busca          (clean phone: strip @s.whatsapp.net, keep digits only)
-→ Buscar Médico Google Sheets  (lookup by phone column)
-→ Médico Encontrado?      (IF: abort if not found)
-→ Mapear Dados p/ Celcoin (map sheet columns → structured doctor object)
-→ Autenticar Celcoin      (POST oauth2/token, Basic Auth)
-→ Extrair Token           (merge token + doctor data into single object)
-→ Buscar Pessoa Celcoin   (GET /persons — fetch all persons from Celcoin)
-→ Extrair Person Celcoin  (find person_id by phone: area_code + number match)
-→ Simular Empréstimo      (POST /applications/preview-total-amount)
-→ Preparar Solicitação    (merge simulation result with doctor data)
-→ Solicitar Empréstimo (CCB) (POST /applications)
-→ Extrair Application ID  (extract application_id, carry forward key fields)
-→ Adicionar Assinatura    (POST /applications/{id}/signatures — physical signature)
-→ [parallel]
-   ├── Enviar Contrato WhatsApp  (STUB — pendente implementação via WhatsApp API Oficial)
-   ├── Salvar Contrato Supabase  (POST /rest/v1/contracts)
-   └── Log Operação              (POST /rest/v1/operation_logs)
-```
+Core (no n8n API needed):
+- `tools_documentation` — reference for any MCP tool. Call it when unsure of a tool's shape.
+- `search_nodes` / `get_node` — find nodes and read their properties/docs.
+- `validate_node` / `validate_workflow` — pre-deploy validation.
+- `search_templates` / `get_template` — 2,300+ prebuilt workflows.
 
-## Celcoin (FlowFinance) API
+Management (require the n8n API to be configured):
+- `mcp__n8n__n8n_get_workflow` — read current state.
+- `mcp__n8n__n8n_update_partial_workflow` — make targeted changes (**preferred** over full update).
+- `mcp__n8n__n8n_validate_workflow` — validate the live workflow after changes.
+- `mcp__n8n__n8n_autofix_workflow` — fix common errors automatically.
 
-**Environment:** Sandbox only (prod URLs also point to sandbox currently)
-- Auth: `https://sandbox.auth.flowfinance.com.br/oauth2/token`
-- Platform: `https://sandbox.platform.flowfinance.com.br/banking/originator`
-- Auth method: Basic Auth → `client_credentials` grant → Bearer token
+> The n8n-mcp server and n8n-skills plugin must be configured before management tools
+> work. n8n-skills install: `/plugin install czlonkowski/n8n-skills`. The MCP server is
+> added via `.mcp.json` with `N8N_API_URL` + `N8N_API_KEY`. If these aren't connected
+> yet, say so rather than guessing at workflow state.
 
-**Credentials in n8n:** HTTP Basic Auth credential ID `nUAcFOPzE1fWKMXU` ("Auth Celcoin")
+### When to reach for which skill
 
-**Key endpoints:**
-- `GET /persons` — list all persons (no server-side phone filter; filter in code by `phone.area_code + phone.number`)
-- `POST /applications/preview-total-amount` — loan simulation
-- `POST /applications` — create CCB (requires `product.id`, `borrower.id`, `funding.id`)
-- `POST /applications/{id}/signatures` — add physical signature
+The n8n-skills plugin covers, among others: **Expression Syntax** (`$json`, `$node`;
+webhook data lives under `$json.body`), **MCP Tools Expert**, **Workflow Patterns**
+(webhook / HTTP API / database / AI / scheduled), **Validation Expert** (reading errors,
+false positives), **Node Configuration**, **Code JavaScript / Python / Code Tool**,
+**Error Handling**, **Binary & Data**, **Sub-workflows**, **AI Agents**, **Multi-Instance**,
+and **Self-Hosting**. Consult the matching skill before writing Code nodes, expressions,
+or AI-agent wiring rather than improvising.
 
-**Product/Funding IDs** are stored as n8n env vars: `CELCOIN_PRODUCT_ID`, `CELCOIN_FUNDING_ID`.
+## Node Preferences & Conventions
 
-## Data Flow Notes
+- Use the **`n8n-nodes-base.supabase`** node (credential `PBRtbhImrvfXokbu`,
+  "Supabase account 2") for **all** Supabase operations — never HTTP Request nodes for
+  Supabase. Easier to read and edit in the n8n UI.
+- HTTP Request nodes are only for external APIs (Celcoin, Evolution API, ClickSign, etc.).
+- **Partial-update ordering gotcha:** with mixed operation types in one
+  `n8n_update_partial_workflow` call, the tool may reorder them (e.g. `updateNode` before
+  `removeConnection`), causing name-mismatch errors. Split into two calls:
+  1. `removeNode` / `removeConnection` only
+  2. `updateNode` (rename/code) + `addConnection`
+- The validator rejects disconnected nodes — if removing a node orphans others, add the
+  replacement connection in the same call.
 
-- Phone format entering the workflow: `5511999999999` (full, with country code 55)
-- Celcoin stores phone as `{ country_code, area_code, number }` — match by concatenating `area_code + number`
-- `Extrair Token` node carries ALL data forward (token + all doctor fields) via `{ token, ...doctorData }`
-- `Extrair Person Celcoin` adds `person_id` to that object — downstream nodes use `$('Extrair Person Celcoin').first().json` as `prevData`
-- Google Sheets credential ID: `KUzlSxm9Z7LCNAkR` ("Google Sheets account"), sheet ID `1A5rjuCrQaQN9Lhb6EqnLa1i0yfOCG_MdMHP6Nvp8Oc4`
+## Project Context (see `spec.md` for full detail)
 
-## Pending Implementation
+**Flows:** 1 Aviso → 2 Receptor/Roteador → 3 Agente Ana → 4A ClickSign (Termos) →
+5 Emissão CCB Celcoin (`wqyQKymnaXLTFazA`) → 6 Assinatura/Finalização (`kr8Ou1tefMyzEDnB`).
 
-- **Enviar Contrato WhatsApp**: stub Set node, outputs `{ status: "pendente_whatsapp", application_id, phone, nota }`. Will be replaced with WhatsApp API Oficial call when implemented.
+**Credentials (n8n):**
 
-## Reference File
+| Service | Credential ID | Name |
+|---------|--------------|------|
+| Celcoin Basic Auth | `nUAcFOPzE1fWKMXU` | Auth Celcoin |
+| Google Sheets | `KUzlSxm9Z7LCNAkR` | Google Sheets account |
+| Supabase | `PBRtbhImrvfXokbu` | Supabase account 2 |
 
-`celcoin-medflow.yaml` — Insomnia collection with all Celcoin API endpoints. Use as reference for endpoint URLs, request body shapes, and auth patterns. Do not modify this file.
+**Env vars (n8n):** `CELCOIN_PRODUCT_ID`, `CELCOIN_FUNDING_ID`, `SUPABASE_URL`,
+`SUPABASE_SERVICE_KEY`.
+
+**Data stores:** Google Sheets (ID `1A5rjuCrQaQN9Lhb6EqnLa1i0yfOCG_MdMHP6Nvp8Oc4`) is the
+primary source of doctor/anticipation data; Supabase (project `ijankjcupfdfqhvulrfh`)
+tracks `contracts_ccb`, `contracts_termos_servico`, `operation_logs`.
+
+### Celcoin (FlowFinance) API — sandbox only
+
+- Auth: `https://sandbox.auth.flowfinance.com.br/oauth2/token` — Basic Auth →
+  `client_credentials` grant → Bearer token (~1h TTL).
+- Platform: `https://sandbox.platform.flowfinance.com.br/banking/originator`.
+- Key endpoints: `GET /persons` (no server-side phone filter — filter in code by
+  `phone.area_code + phone.number`), `POST /applications/preview-total-amount` (simulate),
+  `POST /applications` (create CCB; needs `product.id`, `borrower.id`, `funding.id`;
+  `signature_collect_method: LINK`), `GET /applications/{id}/signatures` (returns
+  `collect_sign_link`, a ZapSign URL).
+
+### Data-flow rules (Fluxo 5)
+
+- Phone enters as `5511999999999` (with country code 55). Celcoin stores
+  `{ country_code, area_code, number }` — match by concatenating `area_code + number`.
+- `Extrair Token` carries all data forward via `{ token, ...doctorData }`.
+- `Extrair Person Celcoin` adds `person_id`; downstream nodes read
+  `$('Extrair Person Celcoin').first().json` as `prevData`.
+
+## Reference Files (do not modify)
+
+- **`spec.md`** — full product spec: all 6 flows, Supabase schema, integrations, pending work.
+- **`celcoin-medflow.yaml`** — Insomnia collection with all Celcoin endpoints, request
+  bodies, and auth patterns.
+- **`.firecrawl/`** — scraped ClickSign docs (auth, sandbox, IP allowlist, 403 fixes).
