@@ -81,8 +81,8 @@ collection:
           type: basic
           useISO88591: false
           disabled: false
-          username: CELCOIN_CLIENT_ID_REDACTED
-          password: CELCOIN_CLIENT_SECRET_REDACTED
+          username: ${CELCOIN_CLIENT_ID}
+          password: ${CELCOIN_CLIENT_SECRET}
         settings:
           renderRequestBody: true
           encodeUrl: true
