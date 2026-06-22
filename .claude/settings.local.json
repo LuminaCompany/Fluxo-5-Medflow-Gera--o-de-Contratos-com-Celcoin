@@ -3,7 +3,12 @@
     "allow": [
       "mcp__n8n__search_executions",
       "Bash(cd /tmp && head -c 600 ff_orig.json && echo \"---\" && grep -o -i \"beneficiar[a-z_-]*\\\\|pix\\\\|bank_account\\\\|account\" ff_orig.json | sort | uniq -c)",
-      "Read(//e/tmp/**)"
+      "Read(//e/tmp/**)",
+      "mcp__n8n-mcp__n8n_update_partial_workflow",
+      "mcp__n8n-mcp__n8n_validate_workflow",
+      "mcp__n8n-mcp__n8n_list_workflows",
+      "mcp__n8n-mcp__n8n_get_workflow",
+      "mcp__n8n-mcp__n8n_health_check"
     ]
   }
 }

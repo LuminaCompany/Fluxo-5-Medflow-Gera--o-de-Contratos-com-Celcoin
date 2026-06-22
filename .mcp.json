@@ -3,6 +3,17 @@
     "supabase": {
       "type": "http",
       "url": "https://mcp.supabase.com/mcp?project_ref=ijankjcupfdfqhvulrfh"
+    },
+    "n8n-mcp": {
+      "command": "cmd",
+      "args": ["/c npx n8n-mcp"],
+      "env": {
+        "MCP_MODE": "stdio",
+        "LOG_LEVEL": "error",
+        "DISABLE_CONSOLE_OUTPUT": "true",
+        "N8N_API_URL": "https://automacao-medflow-n8n.zhe0xi.easypanel.host",
+        "N8N_API_KEY": "N8N_API_KEY_REDACTED"
+      }
     }
   }
 }
