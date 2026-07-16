@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an **n8n automation workflow** project (not a traditional codebase). All logic lives inside n8n as workflow nodes. The only local file is `celcoin-medflow.yaml` — an Insomnia collection used as API reference for Celcoin/FlowFinance endpoints.
+This is an **n8n automation workflow** project (not a traditional codebase). All logic lives inside n8n as workflow nodes. The only local file is `Documentações da API/celcoin-medflow.yaml` — an Insomnia collection used as API reference for Celcoin/FlowFinance endpoints.
 .
 **Workflow:** Fluxo 5 — Emissão CCB (Celcoin)
 **n8n Workflow ID:** `wqyQKymnaXLTFazA`
@@ -87,4 +87,4 @@ Chamado pelo Fluxo 3
 
 ## Reference File
 
-`celcoin-medflow.yaml` — Insomnia collection with all Celcoin API endpoints. Use as reference for endpoint URLs, request body shapes, and auth patterns. Do not modify this file.
+`Documentações da API/celcoin-medflow.yaml` — Insomnia collection with all Celcoin API endpoints. Use as reference for endpoint URLs, request body shapes, and auth patterns. Do not modify this file.

@@ -1,0 +1,299 @@
+{
+  "info": {
+    "_postman_id": "4abeeaff-b9e0-4b42-9ab1-53c3958ea423",
+    "name": "MedFlow API",
+    "description": "API para gerenciamento de solicitações de empréstimo",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Autenticado: Operações",
+      "item": [
+        {
+          "name": "Lista todos os empréstimos do usuário autenticado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/protected/loans",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "protected",
+                "loans"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Cria um novo empréstimo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/protected/loans",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "protected",
+                "loans"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loan\": {\n    \"receivable_ids\": [\n      \"string\"\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Autenticado: Perfil",
+      "item": [
+        {
+          "name": "Obter dados do perfil",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/protected/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "protected",
+                "profile"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Definir a chave PIX do usuário (apenas uma vez)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/protected/profile/update_pix",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "protected",
+                "profile",
+                "update_pix"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pix_key\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Cadastro",
+      "item": [
+        {
+          "name": "Cadastro de um novo usuário",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users"
+              ]
+            },
+            "description": "Cria ou ativa o cadastro do médico. Se o CPF/CRM casar com um registro pendente (importado do DoctorID), ativa-o e responde 200; se for um cadastro totalmente novo, cria e responde 201. Divergência de identificação (CPF/CRM) com registro existente → 422.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user\": {\n    \"email\": \"string\",\n    \"password\": \"string\",\n    \"password_confirmation\": \"string\",\n    \"name\": \"string\",\n    \"cpf\": \"string\",\n    \"crm\": \"string\",\n    \"crm_state\": \"string\",\n    \"phone\": \"string\",\n    \"birthdate\": \"string\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Recuperação de senha",
+      "item": [
+        {
+          "name": "Solicita o código de redefinição de senha por email",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/password_resets",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "password_resets"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Redefine a senha a partir do código enviado por email",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/password_resets/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "password_resets",
+                ":id"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"string\",\n  \"password_confirmation\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sessão",
+      "item": [
+        {
+          "name": "Login de um usuário existente",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sign_in",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sign_in"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user\": {\n    \"email\": \"string\",\n    \"password\": \"string\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout do usuário",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sign_out",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "sign_out"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://medflow-hhrc.onrender.com/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "SEU_TOKEN_JWT",
+      "type": "string"
+    }
+  ]
+}
