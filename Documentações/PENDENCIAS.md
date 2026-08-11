@@ -170,6 +170,91 @@
   }
   ```
 
+### P0-45. Fluxo 3 — env vars da MedFlow não existem, node de auth falha
+- [X] **Fix** — resolvido em 2026-08-10 (env vars criadas, verificado em execução real: `has_client_id: true`, `client_id_len: 20`, `client_secret_len: 43`, token emitido com sucesso)
+- **Workflow:** Fluxo 3 (`FX6bv7g3sxAkjfhj`)
+- **Node:** `Autenticar MedFlow` (HTTP Request)
+- **Origem:** troca da tool Google Sheets pelas tools da API MedFlow (2026-08-07).
+- **Problema:** o header é `=Basic {{ ($env.MEDFLOW_CLIENT_ID + ':' + $env.MEDFLOW_CLIENT_SECRET).base64Encode() }}`. Nenhuma das duas env vars existe no n8n hoje. Sem elas o Basic vai vazio → `401 invalid_client` → `access_token` undefined → `antecipacoes_disponiveis` e `status_antecipacoes` tomam 401 → a Ana perde TODA a fonte de dados de plantão.
+- **Solução:**
+  1. Criar no EasyPanel (serviço do n8n) e reiniciar o container:
+     ```
+     MEDFLOW_CLIENT_ID=mfc_41758b7b43f45c67
+     MEDFLOW_CLIENT_SECRET=<client_secret da MedFlow>
+     ```
+  2. Validar com um médico real: executar o Fluxo 3 e conferir que `Autenticar MedFlow` retorna `access_token`, `aud: chat-automation`, `expires_in: 900`.
+  3. O node está com `onError: continueRegularOutput` — ele NÃO derruba o fluxo quando falha, só devolve resposta vazia. Confirmar que o prompt cai em `TRANSFER_HUMAN` nesse caso (regra "Falha de ferramenta" já está no system message).
+
+### P0-46. Fluxo 3 — write-back da planilha parou de casar (plantao_id virou UUID)
+- [ ] **Fix**
+- **Workflow:** Fluxo 3
+- **Nodes:** `Atualizar Status (Gerando Termos de Serviço)`, `Marcar Fila` (ambos Google Sheets, `operation: update`)
+- **Origem:** troca da tool Google Sheets pelas tools da API MedFlow (2026-08-07).
+- **Problema:** os dois nodes casam a linha por `matchingColumns: ["ID"]` com `ID = {{ $json.plantao_id }}`. O `plantao_id` agora vem de `entries[].id` da MedFlow (UUID), não mais da coluna `ID` da planilha. **Nenhum update casa** → a linha nunca sai de `Aviso de valor disponível enviado` e nunca vira `Na fila`.
+  - **Efeito em cascata (o pior):** o dedupe do Fluxo 1 (#P0-7) filtra por `STATUS`. Como o STATUS não avança mais, **o médico volta a receber a oferta todo dia**, inclusive com contrato já em assinatura.
+  - `Atualizar Status` (Rejeitou) casa por `phone` — esse continua funcionando.
+- **Solução (escolher 1):**
+  - **(a) Correlacionar IDs (recomendado):** criar coluna `entry_id` na planilha e o Fluxo 1 gravar nela o `entries[].id` da MedFlow ao popular a linha. Depois trocar `matchingColumns` dos dois nodes para `["entry_id"]`.
+  - **(b) Migrar o estado pro Supabase:** parar de usar a planilha como máquina de estado; gravar o progresso em `receivables.status` (tabela já existe, ver #P1-21) casando por `entry_id`. Fluxo 1 e Fluxo 4 passam a ler de lá.
+  - **(c) Estado só na MedFlow:** dropar os dois nodes e derivar tudo de `blocked_reason: loan` (receivables) + `loans.status`. Mais limpo, mas exige mexer no dedupe do Fluxo 1 e no Fluxo 4 antes.
+
+### P0-47. Fluxo 4 lê valor da planilha enquanto a Ana mostra valor da API
+- [X] **Fix** — resolvido em 2026-08-10. Escopo ampliado: **Fluxo 4 e Fluxo 5 passaram a ler TODA informação da API MedFlow, com o CPF do médico como chave.**
+- **Workflows:** Fluxo 4 (`UBxeuuB9tt9Osfs3`), Fluxo 5 (`wqyQKymnaXLTFazA`), + repasse de CPF no Fluxo 3 (`FX6bv7g3sxAkjfhj`) e Fluxo 6 (`kr8Ou1tefMyzEDnB`)
+- **Problema (original):** a Ana citava `available_amount` / `simulation.net_amount` vindos de `GET /protected/receivables`, mas o contrato de Termos era montado com o `Valor Disponível` da planilha. Se os dois divergissem (taxa diferente, IOF, margem liberada, planilha desatualizada), **o médico assinaria um valor diferente do que viu no WhatsApp**. Risco jurídico, não só de UX. O Fluxo 5 tinha o mesmo problema no valor da CCB.
+
+- **O que foi feito — bloco MedFlow idêntico nos dois fluxos:**
+  ```
+  <trigger> → Identidade Supabase → Resolver Identidade → Autenticar MedFlow
+            → Perfil MedFlow → <IF perfil ok?> → Antecipações MedFlow → <Somar>
+  ```
+  - `Identidade Supabase` (Supabase `doctors`, `matchType: anyFilter` por `cpf` **ou** `whatsapp`, `alwaysOutputData`): serve **só** para resolver identidade — devolve `doctors.id` (FK dos inserts) e o CPF de cadastro quando o chamador não mandou. Nenhum valor de antecipação sai daí.
+  - `Resolver Identidade` (Code): `cpf = digits(input.cpf) || digits(doctors.cpf)`, `phone = digits(input.phone) || digits(doctors.whatsapp)`. Lança erro explícito se faltar CPF ou telefone. Também expõe `cpf_mascarado` (`413******03`) para mensagens de erro — CPF cru nunca vai para log.
+  - `Autenticar MedFlow`: `POST /service/token`, Basic `MEDFLOW_CLIENT_ID:MEDFLOW_CLIENT_SECRET`, body `{cpf, phone}`, `Accept: application/json`, `onError: continueRegularOutput` + `retryOnFail`.
+  - `Perfil MedFlow`: `GET /protected/profile` → nome, e-mail, CPF, CRM/UF, nascimento e endereço estruturado (`street/number/complement/neighborhood/city/state/postal_code`).
+  - `Antecipações MedFlow`: `GET /protected/receivables?dashboard=true` — **exatamente a mesma chamada que a tool `antecipacoes_disponiveis` da Ana faz**.
+  - Headers `Authorization: Bearer` + `JWT-AUD: chat-automation` + `Accept: application/json` em todo `/protected/*`.
+
+- **Fluxo 4 — o que mudou:**
+  - **Removidos:** `Pegar Informações de antecipação`, `Split IDs Termos`, `Buscar Valores Termos` (os 3 Google Sheets) e `Autenticação` + `Buscar medico pelo CPF` (Celcoin `GET /persons`). O Fluxo 4 **não fala mais com a Celcoin nem com a planilha** para obter dados.
+  - `Somar Termos` reescrito: indexa `data[].attributes.entries[]` por `id` (UUID), casa com os `plantao_ids` recebidos, **aborta** se algum vier `blocked` / sem `simulation` / ausente (evita assinar valor diferente do combinado), e soma `available_amount`, `simulation.net_amount`, `interest` e `iof`. Também devolve `hospital` (`company.group_name`), `competencia` (safra) e `payment_date`.
+  - `Medico Encontrado?` agora testa `access_token && data.attributes` do MedFlow; ramo false vai para o novo `Abortar Sem MedFlow` (Stop and Error com CPF mascarado) em vez de morrer em silêncio.
+  - `Informações Medico Celcoin` (nome mantido para não quebrar as 5 referências downstream) passou a ler tudo do `Perfil MedFlow`. Campos novos: `CEP`, `Cidade`, `UF`. Campo `=Hospital` (typo, ver #P2-30) virou `Hospital` alimentado pela API.
+  - `Editar Contrato`: `{CEP}`, `{Cidade}` e `{UF}` deixaram de ser placeholders vazios (resolve parte do #P1-16). `{Número do RG}` e `{Órgão Emissor do RG}` continuam sem fonte — a MedFlow não expõe RG.
+  - `Criar Pasta` usava `{{ $json.Cliente }}`, campo que não existia mais → pasta saía com nome vazio. Agora usa `{{ $json.Nome }}`.
+  - `Buscar medico` (FK) e `Salvar Contrato Termos Supabase` agora casam por `id`/`cpf` resolvidos e gravam os `plantao_ids` **efetivamente contratados** (saída do `Somar Termos`), não os brutos do input.
+
+- **Fluxo 5 — o que mudou:**
+  - **Removidos:** `Buscar Médico Google Sheets`, `Split IDs CCB`, `Buscar Valores CCB`.
+  - `Somar CCB` reescrito igual ao `Somar Termos` (mesmas travas de divergência).
+  - `Médico Encontrado na tabela?` foi repurposado para checar o perfil MedFlow; `Medico Encontrado?` (Celcoin) ganhou ramo false → `Stop and Error`.
+  - `Buscar medico pelo CPF` (Celcoin) continua — é a **única** coisa que ainda vem da Celcoin, porque `borrower.id` só existe lá. O CPF da query agora vem do `Resolver Identidade`, não da planilha.
+  - `Preparar Solicitação`: nome/e-mail/telefone vêm do `Perfil MedFlow`, valor vem do `Somar CCB`; da Celcoin só o `person_id`.
+  - `meta enviar texto` não referencia mais `Buscar Médico Google Sheets` (node deletado) — usa `Extrair Application ID`.
+  - `Buscar medico Supabase` / `Salvar Contrato Supabase`: mesma correção de FK e de `plantao_ids` do Fluxo 4.
+
+- **Repasse do CPF:**
+  - Fluxo 3 → `Call 'Fluxo 4 ...'` ganhou o input `cpf` = `{{ $('Edit Fields').item.json.doctor_cpf }}`.
+  - Fluxo 6 → `Preparar Dados Fluxo 5` agora emite `cpf` (e normaliza o phone); o trigger `Fluxo Anterior` do Fluxo 5 declara `cpf` e `instancia` (esta última nunca chegava antes, apesar de o `Preparar Solicitação` lê-la).
+  - Se o `cpf` não vier, os dois fluxos caem no `doctors.cpf` do Supabase; se nem isso existir, erram com mensagem explícita.
+
+- **Aberto / a validar em produção:**
+  - `{estado civil}` no contrato ainda é preenchido pelo campo `Nacionalidade` (agora vazio) — a MedFlow não expõe nem estado civil nem nacionalidade. Ver #P1-16.
+  - Vale para os dois fluxos o #P0-50: médico sem cadastro na MedFlow agora **aborta com erro visível** em vez de gerar contrato com dado de planilha.
+  - `valor_total` (o que vai no contrato) = soma de `available_amount`, equivalente direto da coluna `Valor Disponível`. `valor_liquido` (net após juros+IOF) também fica disponível no output caso o contrato precise citar os dois — decidir com o jurídico qual dos dois o `{valor_total}` deve mostrar.
+
+### P0-50. Maioria dos médicos do Supabase não tem cadastro na MedFlow → Ana fica cega
+- [ ] **Fix**
+- **Origem:** smoke test de 2026-08-10 contra a API de produção (`app.medflowfin.com`).
+- **Problema:** dos 4 médicos com CPF na tabela `doctors`, **só 1 tem conta na MedFlow**. Os outros 3 devolvem `404 user_not_found` no `POST /service/token`. Sem token, `antecipacoes_disponiveis` e `status_antecipacoes` não retornam nada e a Ana cai em `TRANSFER_HUMAN` — ou seja, **para 75% da base o atendimento automático simplesmente não funciona**.
+  - Resultado do teste (CPFs mascarados): `462***13` Rafael Coelho → **201 OK**, 1 grupo / 4 plantões, hospital AMA, competência 6/2026. `052***40`, `413***03`, `437***70` → 404.
+  - O erro traz `meta.required_fields: [name, email, phone, cpf, crm, crm_state, birthdate]` — a MedFlow diz quais campos faltam pra criar a conta.
+- **Solução (escolher):**
+  - **(a)** Fazer o onboarding em massa na MedFlow (`POST /users`) a partir do Supabase, antes de ligar o fluxo pra base toda.
+  - **(b)** Tratar 404 explicitamente: em vez de `TRANSFER_HUMAN` genérico, a Ana responde que o cadastro precisa ser concluído e o fluxo dispara o link/onboarding. **Combina com #P1-52** (pedir o CPF ao médico antes de desistir — resolve o caso em que o CPF do Supabase é que está errado, não o cadastro na MedFlow).
+  - **(c)** Restringir o disparo do Fluxo 1 só a médicos que já autenticam na MedFlow (checar antes de ofertar).
+  - Verificar também se `doctors.whatsapp` bate com o telefone cadastrado na MedFlow — a verificação do token é por telefone (`verification_method: "phone"`), com fallback CRM+UF.
+
 ---
 
 ## 🟠 P1 — ALTO (perda de dados, race condition, UX quebrada)
@@ -336,6 +421,56 @@
      - `Webhook` → `Respond to Webhook (200)` → `Code parse + processar`.
      - Habilita `Webhook → Response Mode: When Last Node Finishes` OU usar respondToWebhook explícito.
 
+### P1-48. Fluxo 3 — `maxIterations: 3` ficou apertado com duas tools obrigatórias
+- [ ] **Fix**
+- **Workflow:** Fluxo 3 (`FX6bv7g3sxAkjfhj`)
+- **Node:** `AI Agent — Ana Medflow1`
+- **Origem:** troca da tool Google Sheets pelas tools da API MedFlow (2026-08-07).
+- **Problema:** antes era 1 tool (`informacoes_do_medico`); agora o prompt manda chamar `antecipacoes_disponiveis` **e** `status_antecipacoes` (trava de sequência) antes de confirmar. Com `maxIterations: 3` sobra exatamente uma iteração pra resposta final — qualquer retry de tool, erro 401 ou chamada extra estoura o limite e o agent devolve resposta truncada ou vazia, que o `Refinar Mensagem IA` transforma em "Desculpe, houve um erro. Pode repetir?".
+- **Solução:**
+  1. Subir `maxIterations` para 6.
+  2. Testar um caso de confirmação (2 tools + resumo + confirmação) e conferir nos logs quantas iterações realmente gasta.
+
+### P1-51. Taxa: "7%" do discurso não bate com a simulação real da MedFlow (~4,5%)
+- [ ] **Fix (decisão de negócio)**
+- **Origem:** smoke test de 2026-08-10, dados reais do médico Rafael Coelho.
+- **Problema:** números reais de um plantão de R$ 1.500,00 — `simulation.interest` R$ 60,84 + `simulation.iof` R$ 6,53 = **R$ 67,37 de desconto (4,49%)**, `net_amount` R$ 1.432,63. Um loan já criado mostra `fee_amount` R$ 67,09 + `iof_amount` R$ 6,86 sobre R$ 1.500 (4,93%). O prompt da Ana afirmava **"7% do valor total"** — ela diria 7% e mostraria número de 4,5% na mesma conversa.
+- **Já mitigado:** o prompt foi alterado em 2026-08-10 para **derivar a taxa da `simulation`** do plantão (desconto = `available_amount` − `simulation.net_amount`) em vez de citar percentual fixo. A Ana não contradiz mais o valor exibido.
+- **Falta decidir/alinhar:** qual é a taxa oficial da MedFlow e onde ela é fonte da verdade. Hoje há três números divergentes no sistema:
+  - prompt da Ana: era 7% (agora derivado)
+  - Fluxo 5, `Solicitar Empréstimo (CCB)`: `interest_rate: 0.07` hardcoded (ver #P0-1, que cita spec de 3,5%)
+  - API MedFlow: ~4,5% efetivo na simulação
+- **Solução:** confirmar a taxa correta com o financeiro, alinhar #P0-1, e definir se a CCB da Celcoin deve usar a mesma taxa que a MedFlow simula (senão o médico assina CCB com taxa diferente da que aceitou).
+
+### P1-52. Fluxo 3 — Ana pedir o CPF ao médico e usá-lo como parâmetro na consulta
+- [ ] **Fix**
+- **Workflow:** Fluxo 3 (`FX6bv7g3sxAkjfhj`)
+- **Nodes:** `Autenticar MedFlow`, `antecipacoes_disponiveis`, `status_antecipacoes`, system message do `AI Agent — Ana Medflow1`
+- **Objetivo:** quando o CPF do Supabase não resolve (`404 user_not_found`, CPF vazio, CPF errado ou divergente), a Ana pergunta o CPF ao médico na conversa e refaz a consulta com ele — em vez de transferir pra humano. Mitiga direto o #P0-50 (hoje 3 de 4 médicos ficam sem atendimento automático).
+
+- **Restrição de arquitetura (ler antes de implementar):** as tools de hoje **não podem receber CPF como parâmetro**. Quem carrega a identidade do médico é o `access_token` — `GET /protected/receivables` e `GET /protected/loans` não têm filtro por CPF, devolvem sempre o dono do token. Passar CPF na query não faz nada. Para o CPF digitado valer, ele precisa entrar no `POST /service/token`, que roda **antes** do agent. Ou seja: não basta editar as duas HTTP Request Tools.
+
+- **Solução recomendada — trocar as 2 HTTP tools por 1 Tool Workflow:**
+  1. Criar sub-workflow `helper-medflow-consulta` com `executeWorkflowTrigger` recebendo `{ cpf, phone, crm, crm_state }`.
+  2. Dentro dele: `POST /service/token` → se 201, chama `/protected/receivables?dashboard=true` + `/protected/loans` → devolve um objeto único já normalizado (grupos, entries, loans) **mais** um campo de diagnóstico (`auth_ok`, `auth_error`).
+  3. No Fluxo 3, substituir `antecipacoes_disponiveis` e `status_antecipacoes` por um `toolWorkflow` apontando pra esse sub-workflow, com o CPF vindo de `$fromAI('cpf', 'CPF do médico, só dígitos; deixe vazio para usar o cadastro', 'string')` e **fallback pro CPF do Supabase quando a IA mandar vazio**.
+  4. O `phone` **continua vindo do canal**, nunca do que o médico digita — o swagger é explícito: "NUNCA um número digitado pelo contato, do contrário não prova posse". É o telefone que prova a identidade (`verification_method: "phone"`); o CPF só diz *qual* cadastro procurar.
+  5. Manter o `Autenticar MedFlow` atual como caminho feliz (evita uma chamada extra por mensagem) e usar o tool workflow como retentativa.
+
+- **Alternativa mais barata (se não quiser sub-workflow):** manter as tools como estão e adicionar uma terceira HTTP Request Tool `autenticar_com_cpf` que faz o `POST /service/token` com `cpf` via `$fromAI`. Contra: o token que ela devolve não é acessível pelas outras duas tools de forma confiável (uma tool não lê a saída de outra), então na prática só serve pra *validar* se o CPF existe — a consulta em si continuaria falhando. Só vale se combinada com um `Wait`/segunda passada do agent.
+
+- **Mudanças necessárias no system message:**
+  - Hoje a seção **DADOS SENSÍVEIS** diz "Nunca peça, confirme, repita ou registre: CPF..." e "O sistema já identifica o médico automaticamente — você NUNCA precisa pedir CPF". Precisa virar uma **exceção controlada**: pedir CPF **só** quando a consulta falhar por identificação, uma única vez, com justificativa curta ("pra localizar seu cadastro").
+  - Regras a manter: **nunca repetir o CPF de volta** na resposta, nunca confirmar dígitos, nunca pedir junto com dado bancário.
+  - Se o CPF digitado também falhar (`404`), pedir **CRM + UF** (fallback oficial da API) antes de `TRANSFER_HUMAN`.
+  - Tratar `409 identity_conflict` (CPF/CRM divergem de cadastro existente) como `TRANSFER_HUMAN` imediato — é caso de fraude ou cadastro duplicado, não de retentativa.
+  - Limitar retentativa: no máximo 2 tentativas por conversa, senão vira `TRANSFER_HUMAN` (a API tem rate limit 429).
+
+- **LGPD / segurança (não pular):**
+  - O CPF digitado passa a existir no histórico do WhatsApp, no Chatwoot **e** na `Postgres Chat Memory` do agent. Definir se a memória guarda ou mascara — hoje guarda tudo.
+  - Não gravar o CPF em `operation_logs` nem em nenhum log de node; se precisar auditar, gravar mascarado (`413******03`).
+  - Risco de enumeração: alguém com um telefone qualquer tentando CPFs alheios. A API já barra (`verification_failed`, mais `429`), mas o limite de 2 tentativas por conversa é a nossa camada.
+
 ---
 
 ## 🟡 P2 — MÉDIO (eficiência, dívida técnica, robustez)
@@ -417,7 +552,7 @@
   - Fluxo 4 vira orquestrador que chama 4a → 4b → 4c.
 
 ### P2-30. Fluxo 4 — `Hospital: ""` hardcoded
-- [ ] **Fix**
+- [X] **Fix** — resolvido junto com o #P0-47: campo renomeado para `Hospital` e alimentado por `company.group_name` da MedFlow.
 - **Workflow:** Fluxo 4
 - **Node:** `Informações Medico Celcoin` (Set)
 - **Problema:** Field name é `=Hospital` (com `=` literal no nome — typo) e value vazio.
@@ -486,6 +621,17 @@
 
 ### P2-37. Phone normalization global
 - [ ] **Fix** — duplicado de P1-15. Marcar lá quando concluir.
+
+### P2-49. Fluxo 3 — `Refinar Mensagem IA` referencia node que não existe
+- [ ] **Fix**
+- **Workflow:** Fluxo 3 (`FX6bv7g3sxAkjfhj`)
+- **Node:** `Refinar Mensagem IA` (Code)
+- **Problema:** a rede de segurança que converte POSIÇÃO ("o 1", "o 2") em ID real lê `$('Montar Contexto Plantões').first().json.plantoes_json`. **Esse node não existe no workflow** — a chamada sempre lança, o `catch` zera `realIds` e a conversão nunca acontece. Se a IA mandar `plantao_id: "1"` em vez do ID real, o valor passa cru pra frente.
+- **Agravado em 2026-08-07:** com a API MedFlow o ID virou UUID, então um `"1"` vazado é ainda mais visivelmente inválido (antes ao menos colidia com um ID numérico da planilha).
+- **Solução (escolher 1):**
+  - **(a)** Remover o bloco morto (`realIds` + o `.map` de conversão) e confiar no prompt, que já manda usar `entries[].id`.
+  - **(b)** Reconstruir a rede: guardar a última lista de plantões retornada pela tool (Redis por phone, ou um Set node) e mapear posição→UUID a partir dela.
+  - Recomendado (a) enquanto não houver quem popule o contexto — código morto que finge validar é pior que nenhum.
 
 ---
 
@@ -574,11 +720,26 @@
 - [ ] **Fix**
 - Confirmar taxa real (3,5% ou 7%) com Lucas. Documentar fonte da verdade (env var ou `system_config`).
 
+### SPEC-8. Spec desatualizada — Fluxo 3 não usa mais Google Sheets Tool
+- [ ] **Fix (documentação)**
+- **Arquivo:** `spec.md` (seção Fluxo 3, linhas ~111-125) e `CLAUDE.md`
+- **Problema:** a spec descreve o Fluxo 3 com `Tool: Informações do Medico (Google Sheets Tool — leitura de dados reais)`. Desde 2026-08-07 são três nodes novos: `Autenticar MedFlow` (HTTP, entre o lookup Supabase e o `Edit Fields`), `antecipacoes_disponiveis` e `status_antecipacoes` (HTTP Request Tool). A tool do Sheets foi removida.
+- **Solução:**
+  1. Reescrever a sequência do Fluxo 3 na spec (20 → 22 nodes de caminho ativo).
+  2. Adicionar a MedFlow API na seção "Integrações Externas": base `https://app.medflowfin.com/api/v1`, swagger em `/api-docs/v1/swagger.yml`, auth `POST /service/token` (Basic client_id:client_secret + `{cpf, phone}`) → JWT `aud=chat-automation`, TTL 900s, e o header obrigatório `JWT-AUD: chat-automation` em todo `/protected/*`.
+  3. Adicionar `MEDFLOW_CLIENT_ID` e `MEDFLOW_CLIENT_SECRET` na tabela de env vars.
+  4. Marcar que o host `medflow-hhrc.onrender.com` (citado no `Guia_API_MedFlow_Boas_Praticas.md` e no Postman collection) está **morto** — 404 em toda rota.
+
 ---
 
 ## 🎯 Quick Wins — Ordem Recomendada de Execução
 
 Sequência sugerida pra atacar primeiro (impacto máximo / risco mínimo):
+
+0. [ ] **P0-45** Criar env vars `MEDFLOW_CLIENT_ID` / `MEDFLOW_CLIENT_SECRET` + restart (**bloqueia o Fluxo 3 inteiro hoje**) — 5 min
+0b. [ ] **P1-48** Subir `maxIterations` do agent para 6 — 2 min
+0c. [ ] **P0-46** Correlacionar `entry_id` planilha↔MedFlow (destrava o dedupe do Fluxo 1) — 45 min
+0d. [X] **P0-47** Fluxo 4 **e Fluxo 5** lendo tudo da MedFlow (CPF como chave) em vez da planilha/Celcoin — feito 2026-08-10
 
 1. [ ] **P0-5** Filter `APPLICATION_SIGNED` no Fluxo 6 (evita celebração premature) — 5 min
 2. [ ] **P0-4** Trocar HTTP por Supabase node no Fluxo 2 (segurança + bug) — 15 min
@@ -599,13 +760,19 @@ Sequência sugerida pra atacar primeiro (impacto máximo / risco mínimo):
 
 | Prioridade | Quantidade | Estimativa Total |
 |---|---|---|
-| P0 (crítico) | 10 | 4-6h |
-| P1 (alto) | 12 | 6-10h |
-| P2 (médio) | 15 | 8-12h |
+| P0 (crítico) | 13 | 5-8h |
+| P1 (alto) | 15 | 8-13h |
+| P2 (médio) | 16 | 8-12h |
 | P3 (baixo) | 7 | 2-4h |
-| Spec docs | 7 | 1-2h |
-| **TOTAL** | **51** | **21-34h** |
+| Spec docs | 8 | 1-2h |
+| **TOTAL** | **60** | **25-42h** |
 
 ---
 
 *Gerado: 2026-05-25. Baseado em snapshot dos 6 workflows + schema Supabase + validation runtime profile.*
+
+*Atualizado: 2026-08-07. Adicionados P0-45, P0-46, P0-47, P1-48, P2-49 e SPEC-8 — riscos abertos pela troca da tool Google Sheets pelas tools da API MedFlow no Fluxo 3. A numeração dos itens é sequencial global (continua de 44), não reinicia por prioridade.*
+
+*Atualizado: 2026-08-10 (2ª rodada). **P0-47 fechado com escopo ampliado:** Fluxo 4 e Fluxo 5 passaram a coletar TODAS as informações na API MedFlow usando o CPF do médico como chave (`POST /service/token` → `GET /protected/profile` + `GET /protected/receivables?dashboard=true`). Saíram 6 nodes de Google Sheets e 2 de lookup Celcoin; sobrou da Celcoin apenas o `GET /persons` do Fluxo 5, que existe só para obter o `borrower.id`. Fluxo 3 e Fluxo 6 passaram a repassar o `cpf`. Fechado junto: #P2-30. Parcialmente endereçado: #P1-16 (CEP/Cidade/UF).*
+
+*Atualizado: 2026-08-10. Smoke test contra a API de produção (`app.medflowfin.com`) com dados reais. P0-45 fechado (env vars criadas e verificadas). Adicionados P0-50 (só 1 de 4 médicos tem cadastro na MedFlow), P1-51 (taxa 7% não bate com a simulação real de ~4,5%) e P1-52 (Ana pedir CPF ao médico e usar na consulta). Corrigidos no mesmo dia, direto no workflow: header `Accept: application/json` nos 3 nodes MedFlow (sem ele, token inválido devolve HTML de login com HTTP 200 em vez de 401) e o shape JSON:API dos loans (`data[].attributes.status`, não `data[].status` como diz o swagger).*
