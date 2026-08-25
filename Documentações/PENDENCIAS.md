@@ -59,14 +59,14 @@
      ```
   3. Rotacionar token atual (foi exposto no git).
 
-### P0-4. Fluxo 2 — Supabase service key hardcoded + header `Authorization\t` com TAB
-- [ ] **Fix**
+### P0-4. Fluxo 2 — Supabase service key hardcoded + upsert que nunca atualizava
+- [ ] **Fix parcial** — o bug do upsert foi corrigido em 2026-08-12; **a service key exposta continua aberta**.
 - **Workflow:** Fluxo 2 (`OwQhnPQB5MrjTWYz`)
 - **Node:** `Upsert Doctor Supabase` (HTTP Request)
-- **Problema:**
-  - Header `apikey` = `sb_secret_REDACTED_ROTACIONAR` em plaintext.
-  - Header `Authorization\t` tem TAB no nome → n8n ignora → Bearer nunca enviado.
-  - `Prefer: resolution=ignore-duplicates` significa que doctor existente NÃO atualiza (silencioso).
+- **Resolvido em 2026-08-12:** o node fazia `POST /rest/v1/doctors` sem `on_conflict`, batia na constraint `doctors_whatsapp_unique` e devolvia **409**. Com `onError: continueErrorOutput`, o 409 desviava o fluxo pela saída de erro e **pulava** `Autenticação` → `Buscar medico pelo CPF` → `Adicionar Informações da Celcoin no supabase` — o **único node que gravava `doctors.cpf`**. Resultado: todo médico já existente ficava com cadastro congelado no `full_name`+`whatsapp` do primeiro contato, e o Fluxo 3 mandava `cpf: ""` para a MedFlow (422 em toda conversa). Correção: URL com `?on_conflict=whatsapp`, `Prefer: resolution=merge-duplicates,return=representation`, e `cpf` no body vindo de `$('Buscar Status Sheets').first().json.CPF` (só se tiver 11 dígitos, para não sobrescrever cadastro bom com string vazia). Foram adicionados junto o IF `Celcoin achou pessoa?` (evita gravar `undefined` por cima do cadastro quando a Celcoin não acha) e `onError: continueRegularOutput` em `Autenticação`, `Buscar medico pelo CPF` e `Adicionar Informações da Celcoin no supabase` — essa branch passou a rodar de verdade e não pode derrubar o atendimento.
+- **Continua aberto:**
+  - Header `apikey` = `sb_secret_*` em plaintext no node. **Rotacionar e mover para env var/credencial.**
+  - Trocar o HTTP Request por node Supabase nativo depende de suporte a upsert com `on_conflict` — hoje o node v1 não faz.
 - **Solução (substituir HTTP por Supabase node nativo):**
   1. Remover node `Upsert Doctor Supabase`.
   2. Criar `n8n-nodes-base.supabase` com credential `PBRtbhImrvfXokbu` ("Supabase account 2").
@@ -251,9 +251,10 @@
   - O erro traz `meta.required_fields: [name, email, phone, cpf, crm, crm_state, birthdate]` — a MedFlow diz quais campos faltam pra criar a conta.
 - **Solução (escolher):**
   - **(a)** Fazer o onboarding em massa na MedFlow (`POST /users`) a partir do Supabase, antes de ligar o fluxo pra base toda.
-  - **(b)** Tratar 404 explicitamente: em vez de `TRANSFER_HUMAN` genérico, a Ana responde que o cadastro precisa ser concluído e o fluxo dispara o link/onboarding. **Combina com #P1-52** (pedir o CPF ao médico antes de desistir — resolve o caso em que o CPF do Supabase é que está errado, não o cadastro na MedFlow).
+  - **(b) — FEITO em 2026-08-12.** Tratar 404 explicitamente: a Ana avisa que o cadastro precisa ser concluído, cita em linguagem simples os `meta.required_fields` que a API devolve e transfere com esse contexto (seção 0 do system message + `auth_error: user_not_found` do `helper-medflow-consulta`). Junto com #P1-52, cobre também o caso em que o CPF errado era o do Supabase, não o cadastro na MedFlow.
   - **(c)** Restringir o disparo do Fluxo 1 só a médicos que já autenticam na MedFlow (checar antes de ofertar).
   - Verificar também se `doctors.whatsapp` bate com o telefone cadastrado na MedFlow — a verificação do token é por telefone (`verification_method: "phone"`), com fallback CRM+UF.
+- **Continua aberto:** o onboarding em massa (a) e o gate no Fluxo 1 (c). Hoje o médico sem conta é atendido, avisado e transferido — mas não é cadastrado.
 
 ---
 
@@ -443,7 +444,17 @@
 - **Solução:** confirmar a taxa correta com o financeiro, alinhar #P0-1, e definir se a CCB da Celcoin deve usar a mesma taxa que a MedFlow simula (senão o médico assina CCB com taxa diferente da que aceitou).
 
 ### P1-52. Fluxo 3 — Ana pedir o CPF ao médico e usá-lo como parâmetro na consulta
-- [ ] **Fix**
+- [X] **Fix** — implementado em 2026-08-12 pela **solução recomendada** (tool workflow). O que ficou de pé:
+  - Novo sub-workflow **`helper-medflow-consulta`** (`1CtjHDUJDsPvqL34`, inativo, roda só como tool): `Resolver CPF` → cache de token no Redis → `POST /service/token` → `GET /protected/receivables` + `GET /protected/loans` → `Montar Resposta`.
+  - As duas HTTP Request Tools (`antecipacoes_disponiveis`, `status_antecipacoes`) e o `Autenticar MedFlow` do caminho principal **foram removidos**. No lugar, uma tool única `consultar_medflow` (`toolWorkflow` 2.2).
+  - `cpf` vem de `$fromAI`; `cpf_cadastro` e `phone` são expressões FIXAS (`Edit Fields`). O `phone` nunca passa pela IA.
+  - Precedência: **CPF informado pelo médico > `doctors.cpf`**. O CPF confirmado pela MedFlow (`data.attributes`) é gravado de volta em `doctors` pelo próprio helper — é assim que o CPF informado vira cadastro persistente.
+  - Retorno normalizado `{ auth_ok, auth_error, required_fields, medico, antecipacoes[], historico[], operacao_em_curso }`, já filtrado (sem `blocked`/sem `simulation`), somado, ordenado, cortado nos 3 loans mais recentes e **sem CPF**.
+  - `auth_error` mapeado: `cpf_ausente`, `cpf_invalido`, `user_not_found`, `verification_failed`, `identity_conflict`, `rate_limited`, `erro_tecnico`. O system message trata cada um (seção 0 do prompt), com limite de 2 tentativas de CPF por conversa.
+  - `Refinar Mensagem IA` deixou de depender de `medflow_auth_ok` do `Edit Fields`: agora lê `intermediateSteps` e só considera a MedFlow viva se a tool devolveu `auth_ok: true` **naquele turno**. Ganhou também o anti-eco de CPF (mascara qualquer sequência de 11 dígitos na resposta).
+  - Cache de token: `medflow_token:<phone>:<hash do cpf>`, TTL 840s. O hash na chave impede que trocar de CPF na mesma conversa devolva dados do cadastro anterior.
+- **Aberto deste item:** ver #P2-54 (CPF em texto claro no Chatwoot e na Postgres Chat Memory).
+- Contexto original abaixo.
 - **Workflow:** Fluxo 3 (`FX6bv7g3sxAkjfhj`)
 - **Nodes:** `Autenticar MedFlow`, `antecipacoes_disponiveis`, `status_antecipacoes`, system message do `AI Agent — Ana Medflow1`
 - **Objetivo:** quando o CPF do Supabase não resolve (`404 user_not_found`, CPF vazio, CPF errado ou divergente), a Ana pergunta o CPF ao médico na conversa e refaz a consulta com ele — em vez de transferir pra humano. Mitiga direto o #P0-50 (hoje 3 de 4 médicos ficam sem atendimento automático).
@@ -470,6 +481,21 @@
   - O CPF digitado passa a existir no histórico do WhatsApp, no Chatwoot **e** na `Postgres Chat Memory` do agent. Definir se a memória guarda ou mascara — hoje guarda tudo.
   - Não gravar o CPF em `operation_logs` nem em nenhum log de node; se precisar auditar, gravar mascarado (`413******03`).
   - Risco de enumeração: alguém com um telefone qualquer tentando CPFs alheios. A API já barra (`verification_failed`, mais `429`), mas o limite de 2 tentativas por conversa é a nossa camada.
+
+### P1-53. API MedFlow promovida a base de dados primária de todo o sistema
+- [X] **Decisão tomada em 2026-08-12** (documentação atualizada). Execução por fluxo abaixo.
+- **O que mudou:** a MedFlow deixou de ser "a fonte dos Fluxos 4 e 5" e passou a ser a **fonte primária de todo o sistema**. Novo contrato de camadas:
+  - **MedFlow** — verdade sobre cadastro, plantões, valores, simulação e status.
+  - **Supabase** — identidade (FK `doctors.id`), **cache** do cadastro confirmado pela MedFlow, e estado dos contratos.
+  - **Google Sheets** — máquina de estado legada (coluna `STATUS`) + coluna `CPF` que semeia `doctors.cpf`. Em saída.
+  - **Celcoin** — só emissão da CCB e `borrower.id`.
+- **Estado por fluxo:**
+  - Fluxo 3 — **feito** (#P1-52): toda consulta passa pela MedFlow via `consultar_medflow`.
+  - Fluxo 4 e 5 — **feito** (#P0-47).
+  - Fluxo 2 — **parcial**: sincroniza `doctors` a partir da planilha (#P0-4). Ainda lê `STATUS` do Sheets.
+  - Fluxo 1 — **parcial**: `Preparar Dados` passou a carregar a coluna `CPF` e o `camposMedico` a gravá-la (só com 11 dígitos). O disparo continua saindo da planilha, não da MedFlow — ver #P0-46 e #P0-50(c).
+  - Fluxo 6 — repassa `cpf` adiante; não lê valor de lugar nenhum.
+- **Falta:** tirar o Sheets do caminho de estado (#P0-46) e decidir se o Fluxo 1 passa a ofertar a partir de `GET /protected/receivables` em vez da planilha.
 
 ---
 
@@ -622,8 +648,22 @@
 ### P2-37. Phone normalization global
 - [ ] **Fix** — duplicado de P1-15. Marcar lá quando concluir.
 
+### P2-54. LGPD — o CPF digitado passa a existir em texto claro no Chatwoot e na memória do agente
+- [ ] **Fix (precisa de dono)**
+- **Origem:** #P1-52, implementado em 2026-08-12. Antes o CPF só existia no Supabase; agora o médico digita no WhatsApp.
+- **Onde o CPF passa a ficar gravado:**
+  1. Histórico da conversa no **Chatwoot** (mensagem inbound do médico) — fora do nosso controle direto.
+  2. **`Postgres Chat Memory`** do Fluxo 3 (`sessionKey` = phone, `contextWindowLength: 20`) — guarda a mensagem crua, sem expurgo.
+  3. `doctors.cpf` no Supabase — este é intencional e é o objetivo.
+- **O que JÁ está protegido:** o helper nunca devolve CPF para a IA; o `Refinar Mensagem IA` mascara qualquer sequência de 11 dígitos antes de enviar a resposta (`cpf_ecoado_mascarado`); `guard_reasons` e os logs do helper só usam a forma mascarada (`052***40`); a chave do cache de token usa hash, não o CPF.
+- **Decidir:**
+  - (a) Mascarar o CPF ao gravar na `Postgres Chat Memory` (exige node de pré-processamento ou memória customizada).
+  - (b) Job de poda da memória (combina com #P2-28, que já pede TTL).
+  - (c) Aceitar e documentar como tratamento legítimo, com base legal declarada.
+- **Não bloqueia** a entrega do #P1-52, mas não pode ficar sem dono.
+
 ### P2-49. Fluxo 3 — `Refinar Mensagem IA` referencia node que não existe
-- [ ] **Fix**
+- [X] **Fix** — resolvido. O `Refinar Mensagem IA` foi reescrito (v2, 2026-08-12) e o bloco morto que lia `$('Montar Contexto Plantões')` não existe mais. A conversão posição→UUID foi abandonada de propósito (opção **(a)** da solução): o prompt manda usar o `plantao_id` da ferramenta, e o node agora **descarta** qualquer `plantao_id` que não case com o regex de UUID (`plantao_id_nao_e_uuid`), em vez de fingir que valida.
 - **Workflow:** Fluxo 3 (`FX6bv7g3sxAkjfhj`)
 - **Node:** `Refinar Mensagem IA` (Code)
 - **Problema:** a rede de segurança que converte POSIÇÃO ("o 1", "o 2") em ID real lê `$('Montar Contexto Plantões').first().json.plantoes_json`. **Esse node não existe no workflow** — a chamada sempre lança, o `catch` zera `realIds` e a conversão nunca acontece. Se a IA mandar `plantao_id: "1"` em vez do ID real, o valor passa cru pra frente.
@@ -721,7 +761,7 @@
 - Confirmar taxa real (3,5% ou 7%) com Lucas. Documentar fonte da verdade (env var ou `system_config`).
 
 ### SPEC-8. Spec desatualizada — Fluxo 3 não usa mais Google Sheets Tool
-- [ ] **Fix (documentação)**
+- [X] **Fix** — feito em 2026-08-12, junto com #P1-53. `spec.md` ganhou a seção **MedFlow API** em *Arquitetura de Dados* (marcada como fonte primária) e em *Integrações Externas*; o Google Sheets foi reescrito como máquina de estado legada; o Fluxo 3 foi redesenhado com a tool `consultar_medflow`; a tabela de Redis passou a listar as chaves reais; Chatwoot entrou nas integrações (fecha também **SPEC-1**); credenciais Redis/Postgres/Chatwoot e as env vars `MEDFLOW_*` entraram nas tabelas.
 - **Arquivo:** `spec.md` (seção Fluxo 3, linhas ~111-125) e `CLAUDE.md`
 - **Problema:** a spec descreve o Fluxo 3 com `Tool: Informações do Medico (Google Sheets Tool — leitura de dados reais)`. Desde 2026-08-07 são três nodes novos: `Autenticar MedFlow` (HTTP, entre o lookup Supabase e o `Edit Fields`), `antecipacoes_disponiveis` e `status_antecipacoes` (HTTP Request Tool). A tool do Sheets foi removida.
 - **Solução:**
@@ -774,5 +814,7 @@ Sequência sugerida pra atacar primeiro (impacto máximo / risco mínimo):
 *Atualizado: 2026-08-07. Adicionados P0-45, P0-46, P0-47, P1-48, P2-49 e SPEC-8 — riscos abertos pela troca da tool Google Sheets pelas tools da API MedFlow no Fluxo 3. A numeração dos itens é sequencial global (continua de 44), não reinicia por prioridade.*
 
 *Atualizado: 2026-08-10 (2ª rodada). **P0-47 fechado com escopo ampliado:** Fluxo 4 e Fluxo 5 passaram a coletar TODAS as informações na API MedFlow usando o CPF do médico como chave (`POST /service/token` → `GET /protected/profile` + `GET /protected/receivables?dashboard=true`). Saíram 6 nodes de Google Sheets e 2 de lookup Celcoin; sobrou da Celcoin apenas o `GET /persons` do Fluxo 5, que existe só para obter o `borrower.id`. Fluxo 3 e Fluxo 6 passaram a repassar o `cpf`. Fechado junto: #P2-30. Parcialmente endereçado: #P1-16 (CEP/Cidade/UF).*
+
+*Atualizado: 2026-08-12. **Virada de arquitetura:** a API MedFlow passou a ser a base de dados primária de TODO o sistema (#P1-53), e o **CPF passou a ser informado pelo médico na conversa** e usado sempre como parâmetro de consulta (#P1-52 fechado, via novo sub-workflow `helper-medflow-consulta` `1CtjHDUJDsPvqL34`). Fechado junto: #P0-4 (parte do upsert — o 409 na constraint `doctors_whatsapp_unique` pulava a única branch que gravava `doctors.cpf`, e era a causa raiz do 422 em toda conversa do Fluxo 3), #P2-49, #SPEC-8 e #SPEC-1. Endereçado: #P0-50(b). Abertos novos: #P2-54 (CPF em texto claro no Chatwoot e na Postgres Chat Memory). Segue aberto e urgente: a service key do Supabase em plaintext no Fluxo 2 (#P0-4).*
 
 *Atualizado: 2026-08-10. Smoke test contra a API de produção (`app.medflowfin.com`) com dados reais. P0-45 fechado (env vars criadas e verificadas). Adicionados P0-50 (só 1 de 4 médicos tem cadastro na MedFlow), P1-51 (taxa 7% não bate com a simulação real de ~4,5%) e P1-52 (Ana pedir CPF ao médico e usar na consulta). Corrigidos no mesmo dia, direto no workflow: header `Accept: application/json` nos 3 nodes MedFlow (sem ele, token inválido devolve HTML de login com HTTP 200 em vez de 401) e o shape JSON:API dos loans (`data[].attributes.status`, não `data[].status` como diz o swagger).*

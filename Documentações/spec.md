@@ -108,30 +108,51 @@ meta1 (Webhook Meta)
 **Trigger:** Execute Workflow Trigger — chamado pelo Fluxo 2 com `{ phone, instancia, mensagem }`
 **Responsabilidade:** Responder o médico com IA, classificar intenção e rotear ação.
 
-**Sequência real (20 nodes):**
+**Identificação do médico (desde 2026-08-12):** quem chega pelo canal é o **telefone**. O **CPF é informado pelo médico na própria conversa** e é ele que vale como parâmetro de consulta na MedFlow; `doctors.cpf` só entra como rede de segurança quando o médico ainda não informou. O telefone nunca vem do que o médico digita — é ele que prova posse no `/service/token`.
+
+**Sequência real:**
 ```
-When Executed by Another Workflow
-→ Edit Fields                   (set: normaliza inputs)
-→ AI Agent — Ana Medflow1       (LangChain Agent)
-     ├── Model:  OpenAI Chat
-     ├── Memory: Postgres Chat Memory (histórico por médico)
-     └── Tool:   Informações do Medico (Google Sheets Tool — leitura de dados reais)
-→ Refinar Mensagem IA           (code: pós-processa output do agente)
-→ Switch por Intent1            (4 saídas: CONFIRMATION, REJECTION, QUESTION, TRANSFER)
-   ├── saída 0 → meta enviar texto    (QUESTION/resposta padrão — Meta API)
-   ├── saída 1 → meta enviar texto1   → Call 'Fluxo 4 - Envio de Contratos (ClickSign)'
-   ├── saída 2 → meta enviar texto3   → Redis5  (TRANSFER: grava flag de atendimento humano)
-   └── saída 3 → meta enviar texto2   (REJECTION: mensagem de despedida)
+When Executed by Another Workflow   ({ phone, instancia, mensagem })
+→ Buscar Informações do medico   (Supabase doctors por whatsapp — FK + CPF de cadastro)
+→ Edit Fields                    (phone, user_message, doctor_* como fallback do 1º turno)
+→ AI Agent — Ana Medflow1        (LangChain Agent, maxIterations 8, returnIntermediateSteps)
+     ├── Model:  OpenAI Chat (+ OpenAI Chat fallback)
+     ├── Memory: Postgres Chat Memory (sessionKey = phone, janela 20)
+     └── Tool:   consultar_medflow → sub-workflow helper-medflow-consulta
+→ Refinar Mensagem IA            (code: normaliza a saída da IA e aplica os guards)
+→ Switch por Intent1             (5 saídas: QUESTION, CONFIRMATION, TRANSFER_HUMAN, REJECTION, fallback)
+   ├── saída 0 → meta enviar texto    (QUESTION — Chatwoot)
+   ├── saída 1 → meta enviar texto1   → Call 'Fluxo 4 (ClickSign)' + Split Lock IDs + Split Fila IDs
+   ├── saída 2 → meta enviar texto3   → Adicionar Pausa Transfer (72h) → Atualizar Status (Transferido)
+   ├── saída 3 → meta enviar texto2   → Adicionar Pausa Reject (24h) → Registrar Rejeição → Atualizar Status
+   └── fallback → meta enviar texto
 ```
+
+**Tool `consultar_medflow` → `helper-medflow-consulta` (`1CtjHDUJDsPvqL34`)**
+
+Tool única, porque `/protected/*` não aceita CPF como filtro: para o CPF digitado valer, ele precisa entrar no `POST /service/token`, que roda dentro do sub-workflow.
+
+```
+Fluxo Anterior ({ cpf, cpf_cadastro, phone, crm, crm_state })
+→ Resolver CPF (informado > cadastro; valida DV; mascara p/ log; hash p/ cache)
+→ Pode consultar? ─false→ Montar Resposta
+→ Buscar Token Cache (Redis medflow_token:<phone>:<hash>)
+→ Tem token? ─true→ Definir Token
+             └false→ Autenticar MedFlow → Auth OK? ─false→ Montar Resposta
+                                                   └true→ Salvar Token Cache (840s)
+                                                        → Salvar Cadastro (Supabase)
+                                                        → Definir Token
+→ Antecipacoes → Historico → Montar Resposta
+```
+
+Retorno para a IA: `{ auth_ok, auth_error, required_fields, medico, antecipacoes[], historico[], operacao_em_curso }` — já filtrado, somado, ordenado e **sem CPF**.
+
+**Guards do `Refinar Mensagem IA`:** lê `intermediateSteps` e só trata a MedFlow como viva se a tool devolveu `auth_ok: true` naquele turno. `CONFIRMATION` exige tool ok + UUID válido + `doctor_id` + `confidence ≥ 0.6`. Sem MedFlow no turno, nenhum valor em `R$` sai para o médico. Sequência de 11 dígitos na resposta é mascarada (anti-eco de CPF).
 
 **Utilitários (manual):**
-- `.` (Manual Trigger) → `Apagador de Memoria` → `Apagador de Memoria1` — limpa as duas memórias Postgres usadas em testes.
+- `.` (Manual Trigger) → `Apagador de Memoria` → `Apagador de Memoria1` — limpa as memórias Postgres usadas em testes.
 
-**Gap conhecido — sub-fluxo REJECTION:**
-A saída 3 do switch hoje só envia a mensagem de despedida via WhatsApp. **Falta implementar:**
-- Upsert em `doctors_rejections` (increment count, append em `rejection_history`)
-- Update `receivables.status = 'rejected'`
-- Insert em `operation_logs` (tipo=REJECTION)
+**Sub-fluxo REJECTION:** implementado — `Adicionar Pausa Reject (24h)` → `Registrar Rejeição (Supabase)` (upsert `doctors_rejections` + update `receivables` + insert `operation_logs`) → `Atualizar Status`.
 
 **Reenvio:** acionado manualmente por enquanto (não automatizado). Sem limite de rejeições — `status` permanece `active` mesmo após múltiplos `REJECTION`.
 
@@ -267,9 +288,22 @@ Celcoin mantém banco próprio com dados completos de cada operação: pessoa, a
 
 ---
 
+### MedFlow API — **fonte primária**
+
+**Base:** `https://app.medflowfin.com/api/v1` · **Swagger:** `/api-docs/v1/swagger.yml`
+
+Desde 2026-08-12 é a **base de dados primária de todo o sistema**: cadastro do médico, plantões disponíveis, valores, simulação de taxa/IOF e status das antecipações. A chave de acesso é o **CPF do médico**.
+
+- `POST /service/token` — Basic `MEDFLOW_CLIENT_ID:MEDFLOW_CLIENT_SECRET` + body `{cpf, phone}`. `cpf` é o único campo obrigatório; `phone` é o que prova posse e **tem que ser o remetente do canal**, nunca um número digitado pelo contato. Fallback: `crm` + `crm_state`. Devolve JWT com `aud=chat-automation`, TTL 900s — **e o cadastro completo em `data.attributes`**.
+- `GET /protected/profile` — cadastro do médico (name, email, cpf, crm, crm_state, birthdate, pix_key, address).
+- `GET /protected/receivables?dashboard=true` — grupos de plantões; `attributes.entries[].id` é o `plantao_id` (UUID).
+- `GET /protected/loans` — histórico das antecipações (`data[].attributes.status`).
+
+Todo `/protected/*` exige três headers: `Authorization: Bearer`, `JWT-AUD: chat-automation` e `Accept: application/json` (sem o `Accept`, token inválido devolve HTML de login com HTTP 200). **Nenhum endpoint aceita CPF como filtro** — todos devolvem o dono do token.
+
 ### Google Sheets
 **ID:** `1A5rjuCrQaQN9Lhb6EqnLa1i0yfOCG_MdMHP6Nvp8Oc4`
-Fonte primária das antecipações e informações dos médicos. Colunas: phone, nome, CPF, valor disponível, taxa, prazo, dados bancários, status de aprovação.
+**Máquina de estado legada, em saída.** Já não é fonte de dados de antecipação — isso migrou para a API MedFlow. Restam a coluna `STATUS` (progresso do atendimento) e a coluna `CPF`, que o Fluxo 2 usa para semear `doctors.cpf`. Ver #P0-46 para a migração do estado.
 
 ### Google Drive + Google Docs
 Templating de contratos de Termos de Serviço no Fluxo 4: pasta por médico, cópia do template, substituição de placeholders, export para PDF.
@@ -326,9 +360,15 @@ Templating de contratos de Termos de Serviço no Fluxo 4: pasta por médico, có
 **`receivables`:** status enum estendido para `available | offered | accepted | contracted | paid | rejected`. Colunas adicionadas: `rejected_at timestamptz`, `rejection_reason text`. Sub-fluxo REJECTION deve atualizar atomicamente `receivable` + upsert `doctors_rejections`.
 
 ### Redis
-Cache de estado de atendimento. Chave por phone. Usado para:
-- Sinalizar transferência para humano (gravado pelo Fluxo 3 saída TRANSFER → node `Redis5`)
-- Controlar pausa após finalização
+Cache de estado de atendimento. Credencial `L9p3qKni4bM3kh1p` ("medflow").
+
+| Chave | TTL | Quem grava | Para quê |
+|---|---|---|---|
+| `pause:<phone>` | 72h | Fluxo 3, saída TRANSFER_HUMAN | Fluxo 2 dropa mensagens enquanto existir |
+| `pause:<phone>` | 24h | Fluxo 3, saída REJECTION | Idem, após recusa |
+| `medflow_token:<phone>:<hash cpf>` | 840s | helper-medflow-consulta | Evita um `POST /service/token` por chamada de tool (e o 429) |
+
+O `reset`/`#reset` no WhatsApp (Fluxo 2) apaga **todas** as chaves que contenham o telefone — e também memória, logs, contratos e status na planilha.
 
 ### PostgreSQL
 Memória das conversas do agente Ana (Fluxo 3) — `Postgres Chat Memory`. Histórico por médico.
@@ -354,12 +394,23 @@ Memória das conversas do agente Ana (Fluxo 3) — `Postgres Chat Memory`. Hist�
 - Webhook de recebimento alimenta o Fluxo 2 (`meta1`)
 - **Substitui Evolution API** nas versões atuais
 
+### MedFlow API
+- **Fonte primária de dados de todo o sistema** — ver "Arquitetura de Dados → MedFlow API"
+- Base `https://app.medflowfin.com/api/v1`; auth máquina-a-máquina em `POST /service/token` (Basic client_id:secret + `{cpf, phone}`)
+- Env vars `MEDFLOW_CLIENT_ID`, `MEDFLOW_CLIENT_SECRET`
+- O host `medflow-hhrc.onrender.com` do Postman collection está **morto** (404 em toda rota)
+
+### Chatwoot
+- Middleware entre a Meta e o n8n: `automacao-medflow-chatwoot.zhe0xi.easypanel.host`, account `2`, inbox "Whatsapp API OFICIAL"
+- O webhook do Chatwoot alimenta o Fluxo 2; o Fluxo 3 responde pela API de mensagens da conversa
+- Credencial header auth `RMOflFdlQ4t9V8t8` ("meta")
+
 ### OpenAI
-- Modelo: GPT (configurado no node `OpenAI Chat` do Fluxo 3)
-- Usado pelo AI Agent (LangChain) com tool de Google Sheets e memória Postgres
+- Modelo: GPT (configurado no node `OpenAI Chat` do Fluxo 3, com `OpenAI Chat (fallback)`)
+- Usado pelo AI Agent (LangChain) com a tool `consultar_medflow` (sub-workflow) e memória Postgres
 
 ### Google Workspace
-- Sheets (todos os fluxos): planilha mestra de antecipações
+- Sheets: máquina de estado legada (coluna `STATUS`) + coluna `CPF` usada pelo Fluxo 2
 - Drive (Fluxo 4): pastas por médico + cópia de template
 - Docs (Fluxo 4): substituição de placeholders no contrato
 
@@ -372,6 +423,9 @@ Memória das conversas do agente Ana (Fluxo 3) — `Postgres Chat Memory`. Hist�
 | Celcoin Basic Auth | `nUAcFOPzE1fWKMXU` | Auth Celcoin |
 | Google Sheets | `KUzlSxm9Z7LCNAkR` | Google Sheets account |
 | Supabase | `PBRtbhImrvfXokbu` | Supabase account 2 |
+| Postgres (Supabase) | `tN9OEmZXmhVeeMSf` | Postgres Supabase |
+| Redis | `L9p3qKni4bM3kh1p` | medflow |
+| Chatwoot (header auth) | `RMOflFdlQ4t9V8t8` | meta |
 
 ---
 
@@ -379,6 +433,8 @@ Memória das conversas do agente Ana (Fluxo 3) — `Postgres Chat Memory`. Hist�
 
 | Variável | Uso |
 |----------|-----|
+| `MEDFLOW_CLIENT_ID` | client_id da automação de chat na MedFlow |
+| `MEDFLOW_CLIENT_SECRET` | client_secret correspondente |
 | `CELCOIN_PRODUCT_ID` | ID do produto CCB na Celcoin |
 | `CELCOIN_FUNDING_ID` | ID do funding na Celcoin |
 | `SUPABASE_URL` | URL do projeto Supabase |
